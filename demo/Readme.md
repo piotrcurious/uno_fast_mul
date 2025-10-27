@@ -1,3 +1,29 @@
+Step 1 — generate the tables (command)
+
+Put the generator generate_tables.py (the script I gave you) into a working folder and run:
+
+# generate header+definitions in separate files:
+python generate_tables.py --out arduino_tables --emit-c --gen-atan --gen-stereo
+
+This writes:
+
+arduino_tables.h (with extern declarations)
+
+arduino_tables.c (definitions with PROGMEM)
+
+
+Copy both into your Arduino sketch folder (same folder as the .ino) so the Arduino IDE compiles them with the sketch.
+
+If you prefer a single header (no .c) use:
+
+python generate_tables.py --out arduino_tables
+
+That writes one header with definitions; still include that header in the sketch.
+
+--gen-atan and --gen-stereo are optional; they produce additional tables useful for angle approximations or stereographic projection.
+
+
+
 Explanation — how the demo uses the generator tables
 
 1. Generate tables: you run the Python generator to produce arduino_tables.h and arduino_tables.c. Those files contain the following arrays (names shown in code):
