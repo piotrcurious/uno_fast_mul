@@ -1,0 +1,8 @@
+CXX=g++
+CXXFLAGS=-Wall -O3 -I.
+
+host_test: host_test.cpp tables.c
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
+clean:
+	rm -f host_test
