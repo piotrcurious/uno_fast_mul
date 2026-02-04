@@ -5,9 +5,6 @@
 #include <stdint.h>
 #include "fast_mul.h"
 
-// The tables are defined in tables.c which we will compile and link.
-// Since we are on host, PROGMEM is defined to nothing in fast_mul.h.
-
 int main() {
     std::cout << "Starting exhaustive host-based test..." << std::endl;
 
@@ -17,9 +14,8 @@ int main() {
     uint32_t max_err_a = 0, max_err_b = 0;
     uint64_t exact_matches = 0;
 
-    // For exhaustive test, we might want to skip 0 because it's always exact
     for (uint32_t a = 1; a <= 65535; ++a) {
-        if (a % 1000 == 0) {
+        if (a % 10000 == 0) {
             std::cout << "Progress: a = " << a << "/65535" << std::endl;
         }
         for (uint32_t b = 1; b <= 65535; ++b) {
@@ -46,13 +42,9 @@ int main() {
 
     std::cout << "\n--- Statistics ---" << std::endl;
     std::cout << "Total tests: " << total_tests << std::endl;
-    std::cout << "Exact matches: " << exact_matches << " (" << (100.0 * exact_matches / total_tests) << "%)" << std::endl;
+    std::cout << "Exact matches: " << exact_matches << std::endl;
     std::cout << "Average relative error: " << (total_rel_error / total_tests) << "%" << std::endl;
     std::cout << "Max relative error: " << max_rel_error << "% at " << max_err_a << " * " << max_err_b << std::endl;
-
-    uint32_t max_a_b_approx = fast_log_mul_u16(max_err_a, max_err_b);
-    uint32_t max_a_b_exact = max_err_a * max_err_b;
-    std::cout << "  Approx: " << max_a_b_approx << ", Exact: " << max_a_b_exact << std::endl;
 
     return 0;
 }

@@ -29,13 +29,11 @@ Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 static inline uint8_t read_byte_progmem_u8(const uint8_t *addr) {
   uint8_t val;
   asm volatile (
-    "movw r30, %A1\n\t"   // put pointer into Z
-    "lpm\n\t"
-    "mov %0, r0\n\t"
-    "clr r1\n\t"
+    "movw r30, %A1\n\t"
+    "lpm %0, Z\n\t"
     : "=r" (val)
     : "r" (addr)
-    : "r0", "r30", "r31"
+    : "r30", "r31"
   );
   return val;
 }
@@ -44,14 +42,11 @@ static inline uint16_t read_word_progmem_u16(const uint16_t *addr) {
   uint16_t val;
   asm volatile (
     "movw r30, %A1\n\t"
-    "lpm\n\t"
-    "mov %A0, r0\n\t"
-    "lpm\n\t"
-    "mov %B0, r0\n\t"
-    "clr r1\n\t"
+    "lpm %A0, Z+\n\t"
+    "lpm %B0, Z\n\t"
     : "=r" (val)
     : "r" (addr)
-    : "r0", "r30", "r31"
+    : "r30", "r31"
   );
   return val;
 }
@@ -101,17 +96,22 @@ static inline int32_t fast_log2_q8_8(uint16_t v) {
 
 // exp2 from Q8.8 back to integer (approx)
 static inline uint32_t fast_exp2_from_q8_8(int32_t log_q8_8) {
-  if (log_q8_8 <= INT32_MIN/2) return 0;
+  if (log_q8_8 <= -32768) return 0;
   int32_t integer = log_q8_8 >> LOG_Q;
   uint8_t frac = (uint8_t)(log_q8_8 & 0xFF);
   uint16_t exp_frac = READ_WORD(&exp2_table_q8[frac]); // Q8.8
-  if (integer >= 31) return 0xFFFFFFFFUL;
-  else if (integer >= 0) {
-    uint32_t val = ((uint32_t)exp_frac << integer) >> LOG_Q;
+  if (integer >= 32) {
+    return 0xFFFFFFFFUL;
+  } else if (integer >= 8) {
+    uint32_t val = (uint32_t)exp_frac << (integer - 8);
+    return val;
+  } else if (integer >= 0) {
+    uint32_t val = (uint32_t)exp_frac >> (8 - integer);
     return val;
   } else {
     int shift = -integer;
-    uint32_t val = ((uint32_t)exp_frac) >> (LOG_Q + shift - 0);
+    if (shift >= 24) return 0;
+    uint32_t val = ((uint32_t)exp_frac) >> (8 + shift);
     return val;
   }
 }

@@ -76,6 +76,12 @@ Memory: PROGMEM tables cost flash. The included tables are compact: a 256-entry 
 
 Range: this code handles unsigned 16-bit inputs and produces a 32-bit approximate product. You can adapt the method to fractional fixed-point inputs by changing normalization and table semantics.
 
+### Testing and Verification
+
+A comprehensive test harness is included in the `tests/` directory. It features:
+- **Host-based exhaustive test**: Verifies accuracy across all $65535^2$ input combinations.
+- **AVR-based emulation test**: Cross-compiles for `atmega328p` and runs in `simavr` to verify hardware-specific logic and memory access.
+
 
 
 ---

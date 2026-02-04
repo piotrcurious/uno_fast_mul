@@ -37,12 +37,10 @@ static inline uint8_t read_byte_progmem(const uint8_t *addr) {
   uint8_t val;
   asm volatile (
     "movw r30, %A1\n\t"
-    "lpm\n\t"
-    "mov %0, r0\n\t"
-    "clr r1\n\t"
+    "lpm %0, Z\n\t"
     : "=r" (val)
     : "r" (addr)
-    : "r0", "r30", "r31"
+    : "r30", "r31"
   );
   return val;
 }
@@ -88,7 +86,7 @@ static inline uint32_t fast_exp2_from_q8_8(int32_t log_q8_8) {
   int32_t integer = log_q8_8 >> 8;
   uint8_t frac = (uint8_t)(log_q8_8 & 0xFF);
   uint16_t exp_frac = read_word_progmem(&exp2_table[frac]);
-  if (integer >= 31) {
+  if (integer >= 32) {
     return 0xFFFFFFFFUL;
   } else if (integer >= 8) {
     uint32_t val = (uint32_t)exp_frac << (integer - 8);
