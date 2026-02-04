@@ -93,9 +93,18 @@ The `generator/` directory contains `generate_tables.py`, a script to produce ma
 
 ### Testing and Verification
 
-A comprehensive test harness is included in the `tests/` directory. It features:
-- **Host-based exhaustive test**: Verifies accuracy across all $65535^2$ input combinations.
-- **AVR-based emulation test**: Cross-compiles for `atmega328p` and runs in `simavr` to verify hardware-specific logic and memory access.
+A comprehensive test harness is included in the `tests/` directory. For an "out of the box" testing experience, simply run:
+
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+This script automates:
+- **Host-based exhaustive tests**: Verification of both fixed-point and floating-point logic on your local machine.
+- **AVR-based emulation**: Cross-compilation and execution in the `simavr` emulator to verify hardware-specific logic and memory access.
+
+See [tests/README.md](tests/README.md) for detailed instructions and dependency information.
 
 ### High-Precision Float Version (BTM)
 
