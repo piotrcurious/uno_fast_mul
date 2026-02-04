@@ -116,6 +116,10 @@ uint32_t bench_mul_samples = 0;
 double bench_mul_error_rel_sum = 0.0;
 uint32_t bench_mul_error_max = 0;
 
+// ------------------ Globals for animation ------------------
+uint32_t frameCount = 0;
+float frameAngle = 0.0f;
+
 // bench helper records error relative to exact multiply
 static inline void bench_record_mul(uint16_t a, uint16_t b) {
   uint32_t exact = (uint32_t)a * (uint32_t)b;
@@ -273,10 +277,6 @@ void render_frame_tiles() {
     // bench_total_time_us = 0; bench_frames = 0; bench_mul_samples = 0; bench_mul_error_rel_sum = 0; bench_mul_error_max = 0;
   }
 }
-
-// ------------------ Globals for animation ------------------
-uint32_t frameCount = 0;
-float frameAngle = 0.0f;
 
 // ------------------ Setup & loop ------------------
 void setup() {
