@@ -233,11 +233,15 @@ def main():
         for ctype, name, vals in arrays:
             h_content.append(f"extern const {ctype} {args.progmem_macro} {name}[{len(vals)}];")
         if glyph_meta:
+            gh = glyph_meta['height']
+            glyph_type = "uint8_t"
+            if gh > 16: glyph_type = "uint32_t"
+            elif gh > 8: glyph_type = "uint16_t"
             h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_WIDTH;")
             h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_HEIGHT;")
             h_content.append(f"extern const uint16_t {args.progmem_macro} GLYPH_COUNT;")
             h_content.append(f"extern const char {args.progmem_macro} GLYPH_CHAR_LIST[{len(glyph_meta['chars'])+1}];")
-            h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_BITMAPS[{len(glyph_meta['chars']) * glyph_meta['width']}];")
+            h_content.append(f"extern const {glyph_type} {args.progmem_macro} GLYPH_BITMAPS[{len(glyph_meta['chars']) * glyph_meta['width']}];")
         h_content.append("")
         for ctype, name, val in constants:
             h_content.append(f"extern const {ctype} {args.progmem_macro} {name};")
@@ -248,6 +252,10 @@ def main():
         for ctype, name, vals in arrays:
             c_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
         if glyph_meta:
+            gh = glyph_meta['height']
+            glyph_type = "uint8_t"
+            if gh > 16: glyph_type = "uint32_t"
+            elif gh > 8: glyph_type = "uint16_t"
             c_content.append(f"const uint8_t {args.progmem_macro} GLYPH_WIDTH = {glyph_meta['width']};")
             c_content.append(f"const uint8_t {args.progmem_macro} GLYPH_HEIGHT = {glyph_meta['height']};")
             c_content.append(f"const uint16_t {args.progmem_macro} GLYPH_COUNT = {len(glyph_meta['chars'])};")
@@ -256,7 +264,7 @@ def main():
             for ch in glyph_meta['chars']:
                 cols = glyph_meta['glyphs'][ch]
                 flat_glyphs.extend(cols + [0] * (glyph_meta['width'] - len(cols)))
-            c_content.append(fmt_c_array("uint8_t", "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
+            c_content.append(fmt_c_array(glyph_type, "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
         c_content.append("")
         for ctype, name, val in constants:
             c_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")
@@ -265,6 +273,10 @@ def main():
         for ctype, name, vals in arrays:
             h_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
         if glyph_meta:
+            gh = glyph_meta['height']
+            glyph_type = "uint8_t"
+            if gh > 16: glyph_type = "uint32_t"
+            elif gh > 8: glyph_type = "uint16_t"
             h_content.append(f"const uint8_t {args.progmem_macro} GLYPH_WIDTH = {glyph_meta['width']};")
             h_content.append(f"const uint8_t {args.progmem_macro} GLYPH_HEIGHT = {glyph_meta['height']};")
             h_content.append(f"const uint16_t {args.progmem_macro} GLYPH_COUNT = {len(glyph_meta['chars'])};")
@@ -273,7 +285,7 @@ def main():
             for ch in glyph_meta['chars']:
                 cols = glyph_meta['glyphs'][ch]
                 flat_glyphs.extend(cols + [0] * (glyph_meta['width'] - len(cols)))
-            h_content.append(fmt_c_array("uint8_t", "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
+            h_content.append(fmt_c_array(glyph_type, "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
         h_content.append("")
         for ctype, name, val in constants:
             h_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")

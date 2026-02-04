@@ -229,7 +229,7 @@ void rasterize_glyph_to_tile(int gidx, int16_t glyph_cx, int16_t glyph_cy,
 
   // iterate columns then rows
   for (uint8_t col = 0; col < gw; ++col) {
-    uint8_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
+    uint32_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
     if (colbyte == 0) continue;
     for (uint8_t row = 0; row < gh; ++row) {
       if (!(colbyte & (1 << row))) continue;
@@ -506,7 +506,7 @@ void render_tiles_frame(uint32_t t_ms) {
   // bench printing
   if ((millis() - last_bench_print) > 1000) {
     last_bench_print = millis();
-    float avg_frame_ms = (bench_total_time_us / (float)max(1u,bench_frames)) / 1000.0f;
+    float avg_frame_ms = (bench_total_time_us / (float)max((uint32_t)1,bench_frames)) / 1000.0f;
     float avg_rel_err = bench_mul_samples ? (bench_mul_error_rel_sum / (double)bench_mul_samples) : 0.0;
     Serial.printf("Scene %d frame=%u avg_ms=%.2f fps=%.1f free_heap=%u mul_samples=%u avg_rel_err=%.6f max_abs_err=%u\n",
                   (int)current_scene, bench_frames, avg_frame_ms, 1000.0f/avg_frame_ms,

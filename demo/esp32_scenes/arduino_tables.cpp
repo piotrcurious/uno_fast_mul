@@ -750,7 +750,7 @@ const uint8_t PROGMEM GLYPH_WIDTH = 20;
 const uint8_t PROGMEM GLYPH_HEIGHT = 19;
 const uint16_t PROGMEM GLYPH_COUNT = 39;
 const char PROGMEM GLYPH_CHAR_LIST[40] = " !?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const uint8_t PROGMEM GLYPH_BITMAPS[780] = {
+const uint32_t PROGMEM GLYPH_BITMAPS[780] = {
   0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0, 0, 0, 0, 425968,

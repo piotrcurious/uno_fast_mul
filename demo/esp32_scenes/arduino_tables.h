@@ -27,7 +27,7 @@ extern const uint8_t PROGMEM GLYPH_WIDTH;
 extern const uint8_t PROGMEM GLYPH_HEIGHT;
 extern const uint16_t PROGMEM GLYPH_COUNT;
 extern const char PROGMEM GLYPH_CHAR_LIST[40];
-extern const uint8_t PROGMEM GLYPH_BITMAPS[780];
+extern const uint32_t PROGMEM GLYPH_BITMAPS[780];
 
 extern const uint32_t PROGMEM CONST_PI_LOG_Q8;
 extern const uint32_t PROGMEM CONST_2PI_LOG_Q8;

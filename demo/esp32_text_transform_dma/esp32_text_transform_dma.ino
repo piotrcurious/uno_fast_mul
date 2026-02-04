@@ -158,7 +158,7 @@ static inline void bench_record_mul(uint16_t a, uint16_t b) {
   int32_t diff = (int32_t)approx - (int32_t)exact;
   uint32_t err = (diff >= 0) ? diff : -diff;
   bench_mul_samples++;
-  bench_mul_error_sum += (double)err / (double)max(1u, exact);
+    bench_mul_error_sum += (double)err / (double)max((uint32_t)1, exact);
   if (err > bench_mul_error_max) bench_mul_error_max = err;
 }
 
@@ -194,7 +194,7 @@ void render_glyph_transformed(char ch, int16_t cx, int16_t cy, float scale_f, fl
   // iterate glyph pixels (columns then rows)
   // GLYPH_BITMAPS is flattened: index = glyph_idx * gw + col
   for (uint8_t col = 0; col < gw; ++col) {
-    uint8_t colbyte = GLYPH_BITMAPS[idx * gw + col];
+    uint32_t colbyte = GLYPH_BITMAPS[idx * gw + col];
     for (uint8_t row = 0; row < gh; ++row) {
       if (colbyte & (1 << row)) {
         // source coordinates centered at glyph origin:

@@ -160,7 +160,7 @@ void rasterize_glyph_into_tile(char ch, int16_t cx, int16_t cy, float scale_f, f
   // iterate glyph columns/rows
   // GLYPH_BITMAPS flat layout: gidx * gw + col
   for (uint8_t col = 0; col < gw; ++col) {
-    uint8_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
+    uint32_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
     if (colbyte == 0) continue;
     for (uint8_t row = 0; row < gh; ++row) {
       if (!(colbyte & (1 << row))) continue;
