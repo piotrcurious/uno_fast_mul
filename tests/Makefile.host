@@ -6,7 +6,7 @@ all: host_test test_fast_float
 host_test: host_test.cpp tables.c
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-test_fast_float: test_fast_float.cpp ../fast_float.c ../demo/fast_float_demo/fast_float_tables.c
+test_fast_float: test_fast_float.cpp ../fast_float.c ../demo/fast_float_demo/fast_float_tables.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 clean:

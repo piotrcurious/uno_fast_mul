@@ -12,7 +12,7 @@ avr_test.elf: avr_test.c tables.c
 avr_test.hex: avr_test.elf
 	$(OBJCOPY) -O ihex $< $@
 
-avr_float_test.elf: avr_float_test.c ../fast_float.c ../demo/fast_float_demo/fast_float_tables.c
+avr_float_test.elf: avr_float_test.c ../fast_float.c ../demo/fast_float_demo/fast_float_tables.cpp
 	$(CC) $(CFLAGS) $^ -o $@
 
 avr_float_test.hex: avr_float_test.elf

@@ -3,7 +3,7 @@ Step 1 — generate the tables (command)
 Put the generator generate_tables.py (the script I gave you) into a working folder and run:
 
 # generate header+definitions in separate files:
-python generate_tables.py --out arduino_tables --emit-c --gen-atan --gen-stereo
+python generate_tables.py --out arduino_tables --emit-c --gen-atan --gen-stereo --gen-float
 
 This writes:
 

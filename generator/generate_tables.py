@@ -3,7 +3,7 @@
 generate_tables.py
 
 Generates PROGMEM-friendly C header (and optionally .c) with lookup tables for:
- - fast log/exp-based multiplication (msb, log2, exp2)
+ - fast log/exp-based multiplication (msb, log2, exp2) - both fixed-point and BTM float
  - trig (sin, cos)
  - perspective scale (focal/(focal+z))
  - sphere coordinates (theta sin/cos)
@@ -33,31 +33,54 @@ def gen_msb_table(size=256):
 
 def gen_log2_table(size=256, q=8):
     scale = qscale(q)
-    tbl = []
-    for i in range(size):
-        if i < 1:
-            tbl.append(0)
-        else:
-            v = round(math.log2(i) * scale)
-            tbl.append(clamp_int(v, 0, 0xFFFF))
-    return tbl
+    return [round(math.log2(i) * scale) if i >= 1 else 0 for i in range(size)]
 
 def gen_exp2_frac_table(frac_size=256, q=8):
     scale = qscale(q)
-    tbl = []
-    for f in range(frac_size):
-        v = round((2 ** (f / frac_size)) * scale)
-        tbl.append(clamp_int(v, 0, 0xFFFF))
-    return tbl
+    return [round((2 ** (f / frac_size)) * scale) for f in range(frac_size)]
+
+def gen_btm_log2(n1, n2, n3):
+    def f(x): return math.log2(1 + x)
+    t1 = []
+    for i12 in range(2**(n1+n2)):
+        i1 = i12 >> n2
+        i2 = i12 & (2**n2 - 1)
+        x_val = (i12 * 2**n3) + 2**(n3-1)
+        x = x_val / 2**(n1+n2+n3)
+        t1.append(round(f(x) * 65536))
+    t2 = []
+    for i13 in range(2**(n1+n3)):
+        i1 = i13 >> n3
+        i3 = i13 & (2**n3 - 1)
+        x_start = (i1 * 2**(n2+n3)) / 2**(n1+n2+n3)
+        x_end = ((i1+1) * 2**(n2+n3)) / 2**(n1+n2+n3)
+        slope = (f(x_end) - f(x_start)) / (2**(n2+n3) / 2**(n1+n2+n3))
+        correction = slope * (i3 - 2**(n3-1)) / 2**(n1+n2+n3)
+        t2.append(round(correction * 65536))
+    return t1, t2
+
+def gen_btm_exp2(n1, n2, n3):
+    def f(x): return 2**x - 1
+    t1 = []
+    for i12 in range(2**(n1+n2)):
+        x_val = (i12 * 2**n3) + 2**(n3-1)
+        x = x_val / 2**(n1+n2+n3)
+        t1.append(round(f(x) * 65536))
+    t2 = []
+    for i13 in range(2**(n1+n3)):
+        i1 = i13 >> n3
+        i3 = i13 & (2**n3 - 1)
+        x_start = (i1 * 2**(n2+n3)) / 2**(n1+n2+n3)
+        x_end = ((i1+1) * 2**(n2+n3)) / 2**(n1+n2+n3)
+        slope = (f(x_end) - f(x_start)) / (2**(n2+n3) / 2**(n1+n2+n3))
+        correction = slope * (i3 - 2**(n3-1)) / 2**(n1+n2+n3)
+        t2.append(round(correction * 65536))
+    return t1, t2
 
 def gen_sin_cos_table(n=512, q=15):
     scale = qscale(q)
-    sin_tbl = []
-    cos_tbl = []
-    for i in range(n):
-        angle = 2.0 * math.pi * i / n
-        sin_tbl.append(clamp_int(round(math.sin(angle) * scale), -32768, 32767))
-        cos_tbl.append(clamp_int(round(math.cos(angle) * scale), -32768, 32767))
+    sin_tbl = [clamp_int(round(math.sin(2.0*math.pi*i/n)*scale), -32768, 32767) for i in range(n)]
+    cos_tbl = [clamp_int(round(math.cos(2.0*math.pi*i/n)*scale), -32768, 32767) for i in range(n)]
     return sin_tbl, cos_tbl
 
 def gen_perspective_table(n=256, q=8, focal=256.0, zmin=0.0, zmax=1024.0):
@@ -72,32 +95,17 @@ def gen_perspective_table(n=256, q=8, focal=256.0, zmin=0.0, zmax=1024.0):
 
 def gen_sphere_theta_tables(theta_steps=128, q=15):
     scale = qscale(q)
-    sin_t = []
-    cos_t = []
-    for t in range(theta_steps):
-        theta = math.pi * t / (theta_steps - 1)
-        sin_t.append(clamp_int(round(math.sin(theta) * scale), -32768, 32767))
-        cos_t.append(clamp_int(round(math.cos(theta) * scale), -32768, 32767))
+    sin_t = [clamp_int(round(math.sin(math.pi*t/(theta_steps-1))*scale), -32768, 32767) for t in range(theta_steps)]
+    cos_t = [clamp_int(round(math.cos(math.pi*t/(theta_steps-1))*scale), -32768, 32767) for t in range(theta_steps)]
     return sin_t, cos_t
 
 def gen_atan_table(n=1024, q=15, x_range=4.0):
     scale = qscale(q)
-    tbl = []
-    for i in range(n):
-        slope = ((i / (n - 1)) * 2.0 * x_range) - x_range
-        v = round(math.atan(slope) * scale)
-        tbl.append(clamp_int(v, -32768, 32767))
-    return tbl
+    return [clamp_int(round(math.atan(((i/(n-1))*2.0*x_range)-x_range)*scale), -32768, 32767) for i in range(n)]
 
 def gen_stereographic_table(n=256, q=12):
     scale = qscale(q)
-    tbl = []
-    rmax = 2.0
-    for i in range(n):
-        r = (i / (n - 1)) * rmax
-        factor = 2.0 / (1.0 + r * r)
-        tbl.append(round(factor * scale))
-    return tbl
+    return [round((2.0 / (1.0 + ((i/(n-1))*2.0)**2)) * scale) for i in range(n)]
 
 def main():
     parser = argparse.ArgumentParser()
@@ -124,50 +132,45 @@ def main():
     parser.add_argument("--gen-stereo", action="store_true")
     parser.add_argument("--stereo-size", type=int, default=256)
     parser.add_argument("--stereo-q", type=int, default=12)
+    parser.add_argument("--gen-float", action="store_true", help="Generate BTM float tables")
     args = parser.parse_args()
 
     base = Path(args.out)
     header_path = base.with_suffix(".h")
-
     arrays = []
 
-    # MSB
     msb = gen_msb_table(args.msb_size)
     arrays.append(("uint8_t", "msb_table", msb))
-
-    # Log2
     log2 = gen_log2_table(args.log_size, q=args.log_q)
     arrays.append(("uint16_t", f"log2_table_q{args.log_q}", log2))
-
-    # Exp2
     exp2 = gen_exp2_frac_table(args.exp_frac_size, q=args.log_q)
     arrays.append(("uint16_t", f"exp2_table_q{args.log_q}", exp2))
 
-    # Sin/Cos
     sin_tbl, cos_tbl = gen_sin_cos_table(args.sin_cos_size, q=args.sin_cos_q)
     arrays.append(("int16_t", f"sin_table_q{args.sin_cos_q}", sin_tbl))
     arrays.append(("int16_t", f"cos_table_q{args.sin_cos_q}", cos_tbl))
 
-    # Perspective
     persp = gen_perspective_table(args.persp_size, q=args.persp_q, focal=args.persp_focal, zmin=args.persp_zmin, zmax=args.persp_zmax)
     persp_type = "uint16_t" if max(persp) <= 0xFFFF else "uint32_t"
     arrays.append((persp_type, f"perspective_scale_table_q{args.persp_q}", persp))
 
-    # Sphere
     s_sin, s_cos = gen_sphere_theta_tables(args.sphere_theta_steps, q=args.sphere_q)
     arrays.append(("int16_t", f"sphere_theta_sin_q{args.sphere_q}", s_sin))
     arrays.append(("int16_t", f"sphere_theta_cos_q{args.sphere_q}", s_cos))
 
-    # Atan
     if args.gen_atan:
-        atan_tbl = gen_atan_table(args.atan_size, q=args.atan_q, x_range=args.atan_range)
-        arrays.append(("int16_t", f"atan_slope_table_q{args.atan_q}", atan_tbl))
-
-    # Stereo
+        arrays.append(("int16_t", f"atan_slope_table_q{args.atan_q}", gen_atan_table(args.atan_size, q=args.atan_q, x_range=args.atan_range)))
     if args.gen_stereo:
         stereo = gen_stereographic_table(args.stereo_size, q=args.stereo_q)
-        stereo_type = "uint16_t" if max(stereo) <= 0xFFFF else "uint32_t"
-        arrays.append((stereo_type, f"stereo_radial_table_q{args.stereo_q}", stereo))
+        arrays.append(("uint16_t" if max(stereo) <= 0xFFFF else "uint32_t", f"stereo_radial_table_q{args.stereo_q}", stereo))
+
+    if args.gen_float:
+        l_t1, l_t2 = gen_btm_log2(4, 5, 5)
+        e_t1, e_t2 = gen_btm_exp2(4, 5, 5)
+        arrays.append(("uint16_t", "log2_t1", l_t1))
+        arrays.append(("int16_t", "log2_t2", l_t2))
+        arrays.append(("uint16_t", "exp2_t1", e_t1))
+        arrays.append(("int16_t", "exp2_t2", e_t2))
 
     # constants
     log_scale = qscale(args.log_q)
