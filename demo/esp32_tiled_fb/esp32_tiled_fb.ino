@@ -82,11 +82,6 @@ static inline int16_t sin_q15(uint16_t idx) { return sin_table_q15[idx % SIN_SIZ
 static inline int16_t cos_q15(uint16_t idx) { return cos_table_q15[idx % SIN_SIZE]; }
 
 // ------------------ Glyph helpers (from generated header) ------------------
-extern const char GLYPH_CHAR_LIST[];    // char list
-extern const uint8_t GLYPH_BITMAPS[];   // flattened bitmaps (glyph_count * gw bytes)
-extern const uint8_t GLYPH_WIDTH;
-extern const uint8_t GLYPH_HEIGHT;
-extern const uint16_t GLYPH_COUNT;
 
 static int glyph_index_for_char(char c) {
   for (uint16_t i = 0; i < GLYPH_COUNT; ++i) {
@@ -120,6 +115,10 @@ uint32_t bench_frames = 0;
 uint32_t bench_mul_samples = 0;
 double bench_mul_error_rel_sum = 0.0;
 uint32_t bench_mul_error_max = 0;
+
+// ------------------ Globals for animation ------------------
+uint32_t frameCount = 0;
+float frameAngle = 0.0f;
 
 // bench helper records error relative to exact multiply
 static inline void bench_record_mul(uint16_t a, uint16_t b) {
@@ -165,7 +164,7 @@ void rasterize_glyph_into_tile(char ch, int16_t cx, int16_t cy, float scale_f, f
   // iterate glyph columns/rows
   // GLYPH_BITMAPS flat layout: gidx * gw + col
   for (uint8_t col = 0; col < gw; ++col) {
-    uint8_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
+    uint32_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
     if (colbyte == 0) continue;
     for (uint8_t row = 0; row < gh; ++row) {
       if (!(colbyte & (1 << row))) continue;
@@ -278,10 +277,6 @@ void render_frame_tiles() {
     // bench_total_time_us = 0; bench_frames = 0; bench_mul_samples = 0; bench_mul_error_rel_sum = 0; bench_mul_error_max = 0;
   }
 }
-
-// ------------------ Globals for animation ------------------
-uint32_t frameCount = 0;
-float frameAngle = 0.0f;
 
 // ------------------ Setup & loop ------------------
 void setup() {

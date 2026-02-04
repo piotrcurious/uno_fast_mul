@@ -43,18 +43,6 @@ const float GLOBAL_ROT_SPEED = 0.02f;
 const float SCROLL_SPEED = 0.8f; // pixels/ frame for text scroll
 
 // ---------------------- Tables/external symbols (from generated header) ----------------------
-extern const uint8_t msb_table[];         // size 256
-extern const uint16_t log2_table_q8[];    // size 256
-extern const uint16_t exp2_table_q8[];    // size 256
-extern const int16_t sin_table_q15[];     // sin table (Q15)
-extern const int16_t cos_table_q15[];     // cos table (Q15)
-extern const uint16_t perspective_scale_table_q8[]; // 256 entries
-
-extern const char GLYPH_CHAR_LIST[];      // char list
-extern const uint8_t GLYPH_BITMAPS[];     // flattened glyph bitmaps (count * GW)
-extern const uint8_t GLYPH_WIDTH;
-extern const uint8_t GLYPH_HEIGHT;
-extern const uint16_t GLYPH_COUNT;
 
 // ---------------------- Fast log/exp multiply pipeline ----------------------
 static inline uint8_t fast_msb16(uint16_t v) {
@@ -241,7 +229,7 @@ void rasterize_glyph_to_tile(int gidx, int16_t glyph_cx, int16_t glyph_cy,
 
   // iterate columns then rows
   for (uint8_t col = 0; col < gw; ++col) {
-    uint8_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
+    uint32_t colbyte = GLYPH_BITMAPS[gidx * gw + col];
     if (colbyte == 0) continue;
     for (uint8_t row = 0; row < gh; ++row) {
       if (!(colbyte & (1 << row))) continue;
@@ -518,7 +506,7 @@ void render_tiles_frame(uint32_t t_ms) {
   // bench printing
   if ((millis() - last_bench_print) > 1000) {
     last_bench_print = millis();
-    float avg_frame_ms = (bench_total_time_us / (float)max(1u,bench_frames)) / 1000.0f;
+    float avg_frame_ms = (bench_total_time_us / (float)max((uint32_t)1,bench_frames)) / 1000.0f;
     float avg_rel_err = bench_mul_samples ? (bench_mul_error_rel_sum / (double)bench_mul_samples) : 0.0;
     Serial.printf("Scene %d frame=%u avg_ms=%.2f fps=%.1f free_heap=%u mul_samples=%u avg_rel_err=%.6f max_abs_err=%u\n",
                   (int)current_scene, bench_frames, avg_frame_ms, 1000.0f/avg_frame_ms,

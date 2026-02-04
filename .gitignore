@@ -1,0 +1,19 @@
+# Binaries
+tests/*.elf
+tests/*.hex
+tests/host_test
+tests/test_fast_float
+*.o
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

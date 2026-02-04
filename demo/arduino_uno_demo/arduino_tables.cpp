@@ -1,4 +1,4 @@
-#include "fast_mul.h"
+#include "arduino_tables.h"
 
 const uint8_t PROGMEM msb_table[256] = {
   0, 0, 1, 1, 2, 2, 2, 2,

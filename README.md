@@ -79,9 +79,13 @@ Range: this code handles unsigned 16-bit inputs and produces a 32-bit approximat
 ### Advanced Demos
 
 The repository includes advanced demos for ESP32 and Arduino Uno in the `demo/` directory:
-- **ESP32 Text Transforms**: Uses DMA and tiled rendering to perform complex character-level transforms (rotation, scaling, perspective) using the fast multiply pipeline.
-- **Tiled FB Demo**: Demonstrates segmented framebuffer rendering on ESP32 to save RAM while achieving high-performance animations.
+- **ESP32 Text Transform DMA**: Uses DMA to perform complex character-level transforms (rotation, scaling, perspective) using the fast multiply pipeline.
+- **ESP32 Tiled FB**: Demonstrates segmented framebuffer rendering on ESP32 to save RAM while achieving high-performance animations.
+- **ESP32 Scenes**: A creative demo with multiple scenes (scrolling, orbiting, etc.) using tiled rendering.
 - **Arduino Uno Demo**: A version of the text transform demo adapted for the limited resources of the ATmega328P.
+- **Fast Float Demo**: Demonstrates the high-precision BTM floating-point implementation.
+
+Each demo folder is a self-contained Arduino sketch. Run the provided `generate_tables.sh` within each folder to generate the necessary tables and font data (requires `Pillow`).
 
 ### Generator
 
@@ -93,9 +97,18 @@ The `generator/` directory contains `generate_tables.py`, a script to produce ma
 
 ### Testing and Verification
 
-A comprehensive test harness is included in the `tests/` directory. It features:
-- **Host-based exhaustive test**: Verifies accuracy across all $65535^2$ input combinations.
-- **AVR-based emulation test**: Cross-compiles for `atmega328p` and runs in `simavr` to verify hardware-specific logic and memory access.
+A comprehensive test harness is included in the `tests/` directory. For an "out of the box" testing experience, simply run:
+
+```bash
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
+This script automates:
+- **Host-based exhaustive tests**: Verification of both fixed-point and floating-point logic on your local machine.
+- **AVR-based emulation**: Cross-compilation and execution in the `simavr` emulator to verify hardware-specific logic and memory access.
+
+See [tests/README.md](tests/README.md) for detailed instructions and dependency information.
 
 ### High-Precision Float Version (BTM)
 
@@ -103,7 +116,7 @@ A new version supporting full 32-bit `float` operations is provided in `fast_flo
 - **Method**: Uses the **Symmetric Bipartite Table Method (BTM)** to reach a compromise between table size and speed.
 - **Precision**: Achieves ~15 bits of mantissa precision (average error ~0.005%) using only 1024 table entries (8KB flash).
 - **Features**: Supports both multiplication and division of standard IEEE 754 floats.
-- **Usage**: See `demo/fast_float_demo.ino`.
+- **Usage**: See `demo/fast_float_demo/`. For Arduino IDE, ensure all files in that directory are present in your sketch folder.
 
 
 

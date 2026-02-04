@@ -1,8 +1,13 @@
 CXX=g++
-CXXFLAGS=-Wall -O3 -I.
+CXXFLAGS=-Wall -O3 -I. -I..
+
+all: host_test test_fast_float
 
 host_test: host_test.cpp tables.c
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+test_fast_float: test_fast_float.cpp ../fast_float.c ../demo/fast_float_demo/fast_float_tables.cpp
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 clean:
-	rm -f host_test
+	rm -f host_test test_fast_float
