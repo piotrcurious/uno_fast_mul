@@ -74,7 +74,7 @@ def main():
     l_t1, l_t2 = gen_btm_log2(n1, n2, n3)
     e_t1, e_t2 = gen_btm_exp2(n1, n2, n3)
 
-    with open("fast_float_tables.c", "w") as f:
+    with open("demo/fast_float_demo/fast_float_tables.c", "w") as f:
         f.write('#include "fast_float.h"\n\n')
         f.write(fmt_c_array("uint16_t", "log2_t1", l_t1))
         f.write(fmt_c_array("int16_t", "log2_t2", l_t2))

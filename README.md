@@ -112,7 +112,7 @@ A new version supporting full 32-bit `float` operations is provided in `fast_flo
 - **Method**: Uses the **Symmetric Bipartite Table Method (BTM)** to reach a compromise between table size and speed.
 - **Precision**: Achieves ~15 bits of mantissa precision (average error ~0.005%) using only 1024 table entries (8KB flash).
 - **Features**: Supports both multiplication and division of standard IEEE 754 floats.
-- **Usage**: See `demo/fast_float_demo.ino`.
+- **Usage**: See `demo/fast_float_demo/`. For Arduino IDE, ensure all files in that directory are present in your sketch folder.
 
 
 
