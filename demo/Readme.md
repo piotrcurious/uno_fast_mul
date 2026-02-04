@@ -1,15 +1,15 @@
 Step 1 — generate the tables (command)
 
-Put the generator generate_tables.py (the script I gave you) into a working folder and run:
+Use the generator `generator/generate_tables.py` to produce the necessary data for the demos. For ESP32 demos that use font rasterization, you will need the `Pillow` library (`pip install pillow`).
 
-# generate header+definitions in separate files:
-python generate_tables.py --out arduino_tables --emit-c --gen-atan --gen-stereo --gen-float
+# generate header+definitions in separate files for ESP32 demos:
+python3 generator/generate_tables.py --out arduino_tables --emit-c --gen-atan --gen-stereo --gen-float --font-file /path/to/your/font.ttf
 
 This writes:
 
 arduino_tables.h (with extern declarations)
 
-arduino_tables.c (definitions with PROGMEM)
+arduino_tables.cpp (definitions with PROGMEM)
 
 
 Copy both into your Arduino sketch folder (same folder as the .ino) so the Arduino IDE compiles them with the sketch.

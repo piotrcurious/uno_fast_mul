@@ -2,13 +2,14 @@
 """
 generate_tables.py
 
-Generates PROGMEM-friendly C header (and optionally .c) with lookup tables for:
+Generates PROGMEM-friendly C header (and optionally .cpp) with lookup tables for:
  - fast log/exp-based multiplication (msb, log2, exp2) - both fixed-point and BTM float
  - trig (sin, cos)
  - perspective scale (focal/(focal+z))
  - sphere coordinates (theta sin/cos)
  - base constants (PI, 2PI in chosen Q formats)
  - optional angle (atan-approx) table and stereographic projection table
+ - optional glyph bitmaps for TTF/OTF fonts (requires Pillow)
 
 Uses mathematically correct formulas for all tables.
 """
@@ -16,6 +17,12 @@ Uses mathematically correct formulas for all tables.
 from pathlib import Path
 import math
 import argparse
+
+try:
+    from PIL import Image, ImageFont, ImageDraw
+    PILLOW_INSTALLED = True
+except ImportError:
+    PILLOW_INSTALLED = False
 
 def qscale(q): return 1 << q
 def clamp_int(x, lo, hi): return max(lo, min(hi, int(x)))
@@ -43,19 +50,16 @@ def gen_btm_log2(n1, n2, n3):
     def f(x): return math.log2(1 + x)
     t1 = []
     for i12 in range(2**(n1+n2)):
-        i1 = i12 >> n2
-        i2 = i12 & (2**n2 - 1)
         x_val = (i12 * 2**n3) + 2**(n3-1)
         x = x_val / 2**(n1+n2+n3)
         t1.append(round(f(x) * 65536))
     t2 = []
     for i13 in range(2**(n1+n3)):
         i1 = i13 >> n3
-        i3 = i13 & (2**n3 - 1)
         x_start = (i1 * 2**(n2+n3)) / 2**(n1+n2+n3)
         x_end = ((i1+1) * 2**(n2+n3)) / 2**(n1+n2+n3)
         slope = (f(x_end) - f(x_start)) / (2**(n2+n3) / 2**(n1+n2+n3))
-        correction = slope * (i3 - 2**(n3-1)) / 2**(n1+n2+n3)
+        correction = slope * (i13 % 2**n3 - 2**(n3-1)) / 2**(n1+n2+n3)
         t2.append(round(correction * 65536))
     return t1, t2
 
@@ -69,11 +73,10 @@ def gen_btm_exp2(n1, n2, n3):
     t2 = []
     for i13 in range(2**(n1+n3)):
         i1 = i13 >> n3
-        i3 = i13 & (2**n3 - 1)
         x_start = (i1 * 2**(n2+n3)) / 2**(n1+n2+n3)
         x_end = ((i1+1) * 2**(n2+n3)) / 2**(n1+n2+n3)
         slope = (f(x_end) - f(x_start)) / (2**(n2+n3) / 2**(n1+n2+n3))
-        correction = slope * (i3 - 2**(n3-1)) / 2**(n1+n2+n3)
+        correction = slope * (i13 % 2**n3 - 2**(n3-1)) / 2**(n1+n2+n3)
         t2.append(round(correction * 65536))
     return t1, t2
 
@@ -107,6 +110,32 @@ def gen_stereographic_table(n=256, q=12):
     scale = qscale(q)
     return [round((2.0 / (1.0 + ((i/(n-1))*2.0)**2)) * scale) for i in range(n)]
 
+def rasterize_font(ttf_path, size, chars, glyph_w=None, glyph_h=None, mono_threshold=128):
+    if not PILLOW_INSTALLED:
+        raise ImportError("Pillow is required for font rasterization. Install it with 'pip install pillow'.")
+    font = ImageFont.truetype(str(ttf_path), size)
+    max_w, max_h = 0, 0
+    glyphs = {}
+    for ch in chars:
+        bbox = font.getbbox(ch)
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        max_w, max_h = max(max_w, w), max(max_h, h)
+    if glyph_w is None: glyph_w = max(1, max_w)
+    if glyph_h is None: glyph_h = max(1, max_h)
+    for ch in chars:
+        img = Image.new('L', (glyph_w, glyph_h), 0)
+        draw = ImageDraw.Draw(img)
+        draw.text((0, 0), ch, font=font, fill=255)
+        cols = []
+        for x in range(glyph_w):
+            col = 0
+            for y in range(glyph_h):
+                if img.getpixel((x, y)) >= mono_threshold:
+                    col |= (1 << y)
+            cols.append(col)
+        glyphs[ch] = cols
+    return glyphs, glyph_w, glyph_h
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", "-o", default="arduino_tables_generated")
@@ -133,6 +162,11 @@ def main():
     parser.add_argument("--stereo-size", type=int, default=256)
     parser.add_argument("--stereo-q", type=int, default=12)
     parser.add_argument("--gen-float", action="store_true", help="Generate BTM float tables")
+    parser.add_argument("--font-file", help="Path to TTF/OTF font file for rasterization")
+    parser.add_argument("--font-size", type=int, default=14)
+    parser.add_argument("--glyph-chars", default=" !?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+    parser.add_argument("--glyph-w", type=int, default=None)
+    parser.add_argument("--glyph-h", type=int, default=None)
     args = parser.parse_args()
 
     base = Path(args.out)
@@ -172,6 +206,11 @@ def main():
         arrays.append(("uint16_t", "exp2_t1", e_t1))
         arrays.append(("int16_t", "exp2_t2", e_t2))
 
+    glyph_meta = None
+    if args.font_file:
+        glyphs, gw, gh = rasterize_font(args.font_file, args.font_size, list(args.glyph_chars), glyph_w=args.glyph_w, glyph_h=args.glyph_h)
+        glyph_meta = {"width": gw, "height": gh, "chars": list(args.glyph_chars), "glyphs": glyphs}
+
     # constants
     log_scale = qscale(args.log_q)
     sin_scale = qscale(args.sin_cos_q)
@@ -188,11 +227,17 @@ def main():
     ]
 
     guard = base.name.upper() + "_H"
-    h_content = [f"#ifndef {guard}", f"#define {guard}", '#include <stdint.h>', '#include <avr/pgmspace.h>\n']
+    h_content = [f"#ifndef {guard}", f"#define {guard}", '#include <stdint.h>', '#ifdef ARDUINO', '#include <pgmspace.h>', '#else', '#ifndef PROGMEM', '#define PROGMEM', '#endif', '#endif\n']
 
     if args.emit_c:
         for ctype, name, vals in arrays:
             h_content.append(f"extern const {ctype} {args.progmem_macro} {name}[{len(vals)}];")
+        if glyph_meta:
+            h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_WIDTH;")
+            h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_HEIGHT;")
+            h_content.append(f"extern const uint16_t {args.progmem_macro} GLYPH_COUNT;")
+            h_content.append(f"extern const char {args.progmem_macro} GLYPH_CHAR_LIST[{len(glyph_meta['chars'])+1}];")
+            h_content.append(f"extern const uint8_t {args.progmem_macro} GLYPH_BITMAPS[{len(glyph_meta['chars']) * glyph_meta['width']}];")
         h_content.append("")
         for ctype, name, val in constants:
             h_content.append(f"extern const {ctype} {args.progmem_macro} {name};")
@@ -202,13 +247,33 @@ def main():
         c_content = [f'#include "{header_path.name}"\n']
         for ctype, name, vals in arrays:
             c_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
+        if glyph_meta:
+            c_content.append(f"const uint8_t {args.progmem_macro} GLYPH_WIDTH = {glyph_meta['width']};")
+            c_content.append(f"const uint8_t {args.progmem_macro} GLYPH_HEIGHT = {glyph_meta['height']};")
+            c_content.append(f"const uint16_t {args.progmem_macro} GLYPH_COUNT = {len(glyph_meta['chars'])};")
+            c_content.append(f'const char {args.progmem_macro} GLYPH_CHAR_LIST[{len(glyph_meta["chars"])+1}] = "{ "".join(glyph_meta["chars"]) }";')
+            flat_glyphs = []
+            for ch in glyph_meta['chars']:
+                cols = glyph_meta['glyphs'][ch]
+                flat_glyphs.extend(cols + [0] * (glyph_meta['width'] - len(cols)))
+            c_content.append(fmt_c_array("uint8_t", "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
         c_content.append("")
         for ctype, name, val in constants:
             c_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")
-        base.with_suffix(".c").write_text("\n".join(c_content))
+        base.with_suffix(".cpp").write_text("\n".join(c_content))
     else:
         for ctype, name, vals in arrays:
             h_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
+        if glyph_meta:
+            h_content.append(f"const uint8_t {args.progmem_macro} GLYPH_WIDTH = {glyph_meta['width']};")
+            h_content.append(f"const uint8_t {args.progmem_macro} GLYPH_HEIGHT = {glyph_meta['height']};")
+            h_content.append(f"const uint16_t {args.progmem_macro} GLYPH_COUNT = {len(glyph_meta['chars'])};")
+            h_content.append(f'const char {args.progmem_macro} GLYPH_CHAR_LIST[{len(glyph_meta["chars"])+1}] = "{ "".join(glyph_meta["chars"]) }";')
+            flat_glyphs = []
+            for ch in glyph_meta['chars']:
+                cols = glyph_meta['glyphs'][ch]
+                flat_glyphs.extend(cols + [0] * (glyph_meta['width'] - len(cols)))
+            h_content.append(fmt_c_array("uint8_t", "GLYPH_BITMAPS", flat_glyphs, progmem_macro=args.progmem_macro))
         h_content.append("")
         for ctype, name, val in constants:
             h_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")

@@ -101,11 +101,6 @@ static inline uint16_t angle_to_index(float angle) {
 }
 
 // glyph helpers (GLYPH_* from header)
-extern const char GLYPH_CHAR_LIST[];    // string of characters in order
-extern const uint8_t GLYPH_BITMAPS[];   // flattened column-major bitmaps (glyph_count * gw bytes)
-extern const uint8_t GLYPH_WIDTH;
-extern const uint8_t GLYPH_HEIGHT;
-extern const uint16_t GLYPH_COUNT;
 
 static inline int glyph_index_for_char(char c) {
   // naive search in GLYPH_CHAR_LIST (fast enough for small set)

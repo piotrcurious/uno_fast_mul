@@ -79,9 +79,13 @@ Range: this code handles unsigned 16-bit inputs and produces a 32-bit approximat
 ### Advanced Demos
 
 The repository includes advanced demos for ESP32 and Arduino Uno in the `demo/` directory:
-- **ESP32 Text Transforms**: Uses DMA and tiled rendering to perform complex character-level transforms (rotation, scaling, perspective) using the fast multiply pipeline.
-- **Tiled FB Demo**: Demonstrates segmented framebuffer rendering on ESP32 to save RAM while achieving high-performance animations.
+- **ESP32 Text Transform DMA**: Uses DMA to perform complex character-level transforms (rotation, scaling, perspective) using the fast multiply pipeline.
+- **ESP32 Tiled FB**: Demonstrates segmented framebuffer rendering on ESP32 to save RAM while achieving high-performance animations.
+- **ESP32 Scenes**: A creative demo with multiple scenes (scrolling, orbiting, etc.) using tiled rendering.
 - **Arduino Uno Demo**: A version of the text transform demo adapted for the limited resources of the ATmega328P.
+- **Fast Float Demo**: Demonstrates the high-precision BTM floating-point implementation.
+
+Each demo folder is a self-contained Arduino sketch. Run the provided `generate_tables.sh` within each folder to generate the necessary tables and font data (requires `Pillow`).
 
 ### Generator
 

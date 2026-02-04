@@ -43,18 +43,6 @@ const float GLOBAL_ROT_SPEED = 0.02f;
 const float SCROLL_SPEED = 0.8f; // pixels/ frame for text scroll
 
 // ---------------------- Tables/external symbols (from generated header) ----------------------
-extern const uint8_t msb_table[];         // size 256
-extern const uint16_t log2_table_q8[];    // size 256
-extern const uint16_t exp2_table_q8[];    // size 256
-extern const int16_t sin_table_q15[];     // sin table (Q15)
-extern const int16_t cos_table_q15[];     // cos table (Q15)
-extern const uint16_t perspective_scale_table_q8[]; // 256 entries
-
-extern const char GLYPH_CHAR_LIST[];      // char list
-extern const uint8_t GLYPH_BITMAPS[];     // flattened glyph bitmaps (count * GW)
-extern const uint8_t GLYPH_WIDTH;
-extern const uint8_t GLYPH_HEIGHT;
-extern const uint16_t GLYPH_COUNT;
 
 // ---------------------- Fast log/exp multiply pipeline ----------------------
 static inline uint8_t fast_msb16(uint16_t v) {

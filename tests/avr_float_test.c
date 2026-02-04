@@ -25,6 +25,10 @@ int main(void) {
     float res_mul = fast_mul_f32(a, b);
     float res_div = fast_div_f32(a, b);
 
+    // Cast to void to suppress unused variable warnings while ensuring the calls are made
+    (void)res_mul;
+    (void)res_div;
+
     // We can't easily print floats with default avr-libc printf
     // but we can print their raw bits or just confirm completion.
     printf("Multiplication/Division completed.\n");

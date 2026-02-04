@@ -82,11 +82,6 @@ static inline int16_t sin_q15(uint16_t idx) { return sin_table_q15[idx % SIN_SIZ
 static inline int16_t cos_q15(uint16_t idx) { return cos_table_q15[idx % SIN_SIZE]; }
 
 // ------------------ Glyph helpers (from generated header) ------------------
-extern const char GLYPH_CHAR_LIST[];    // char list
-extern const uint8_t GLYPH_BITMAPS[];   // flattened bitmaps (glyph_count * gw bytes)
-extern const uint8_t GLYPH_WIDTH;
-extern const uint8_t GLYPH_HEIGHT;
-extern const uint16_t GLYPH_COUNT;
 
 static int glyph_index_for_char(char c) {
   for (uint16_t i = 0; i < GLYPH_COUNT; ++i) {
