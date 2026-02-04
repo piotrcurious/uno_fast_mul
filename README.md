@@ -76,6 +76,21 @@ Memory: PROGMEM tables cost flash. The included tables are compact: a 256-entry 
 
 Range: this code handles unsigned 16-bit inputs and produces a 32-bit approximate product. You can adapt the method to fractional fixed-point inputs by changing normalization and table semantics.
 
+### Advanced Demos
+
+The repository includes advanced demos for ESP32 and Arduino Uno in the `demo/` directory:
+- **ESP32 Text Transforms**: Uses DMA and tiled rendering to perform complex character-level transforms (rotation, scaling, perspective) using the fast multiply pipeline.
+- **Tiled FB Demo**: Demonstrates segmented framebuffer rendering on ESP32 to save RAM while achieving high-performance animations.
+- **Arduino Uno Demo**: A version of the text transform demo adapted for the limited resources of the ATmega328P.
+
+### Generator
+
+The `generator/` directory contains `generate_tables.py`, a script to produce mathematically correct lookup tables for:
+- Fast log/exp-based multiplication.
+- Trigonometric functions (sin, cos).
+- Perspective and stereographic projections.
+- Sphere coordinate mapping.
+
 ### Testing and Verification
 
 A comprehensive test harness is included in the `tests/` directory. It features:

@@ -14,8 +14,8 @@
 
 // ---------- Tables ----------
 extern const uint8_t PROGMEM msb_table[256];
-extern const uint16_t PROGMEM log2_table[256];
-extern const uint16_t PROGMEM exp2_table[256];
+extern const uint16_t PROGMEM log2_table_q8[256];
+extern const uint16_t PROGMEM exp2_table_q8[256];
 
 // ---------- Helpers ----------
 
@@ -76,7 +76,7 @@ static inline int32_t fast_log2_q8_8(uint16_t v) {
   uint8_t mant8;
   int8_t e;
   normalize_to_mant8(v, &mant8, &e);
-  uint16_t log_m = read_word_progmem(&log2_table[mant8]);
+  uint16_t log_m = read_word_progmem(&log2_table_q8[mant8]);
   int32_t result = ((int32_t)(e - 7) << 8) + (int32_t)log_m;
   return result;
 }
@@ -85,7 +85,7 @@ static inline uint32_t fast_exp2_from_q8_8(int32_t log_q8_8) {
   if (log_q8_8 <= -32768) return 0;
   int32_t integer = log_q8_8 >> 8;
   uint8_t frac = (uint8_t)(log_q8_8 & 0xFF);
-  uint16_t exp_frac = read_word_progmem(&exp2_table[frac]);
+  uint16_t exp_frac = read_word_progmem(&exp2_table_q8[frac]);
   if (integer >= 32) {
     return 0xFFFFFFFFUL;
   } else if (integer >= 8) {

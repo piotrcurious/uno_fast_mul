@@ -53,8 +53,7 @@ def gen_exp2_frac_table(frac_size=256, q=8):
     tbl = []
     for f in range(frac_size):
         v = round((2 ** (f / frac_size)) * scale)
-        v = clamp_int(v, 0, 0xFFFF)
-        tbl.append(v)
+        tbl.append(clamp_int(v, 0, 0xFFFF))
     return tbl
 
 def gen_sin_cos_table(n=512, q=15):

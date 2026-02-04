@@ -79,18 +79,23 @@ static inline int32_t fast_log2_q8_8(uint16_t v) {
 }
 
 static inline uint32_t fast_exp2_from_q8_8(int32_t log_q8_8) {
-  if (log_q8_8 <= INT32_MIN/2) return 0;
+  if (log_q8_8 <= -32768) return 0;
   int32_t integer = log_q8_8 >> LOG_Q;
   uint8_t frac = (uint8_t)(log_q8_8 & 0xFF);
-  uint16_t frac_val = exp2_table_q8[frac];
-  if (integer >= 31) return 0xFFFFFFFFUL;
-  else if (integer >= 0) {
-    uint32_t v = ((uint32_t)frac_val << integer) >> LOG_Q;
-    return v;
+  uint16_t exp_frac = exp2_table_q8[frac];
+  if (integer >= 32) {
+    return 0xFFFFFFFFUL;
+  } else if (integer >= 8) {
+    uint32_t val = (uint32_t)exp_frac << (integer - 8);
+    return val;
+  } else if (integer >= 0) {
+    uint32_t val = (uint32_t)exp_frac >> (8 - integer);
+    return val;
   } else {
     int shift = -integer;
-    uint32_t v = ((uint32_t)frac_val) >> (LOG_Q + shift - 0);
-    return v;
+    if (shift >= 24) return 0;
+    uint32_t val = ((uint32_t)exp_frac) >> (8 + shift);
+    return val;
   }
 }
 
@@ -230,6 +235,7 @@ void rasterize_glyph_to_tile(int gidx, int16_t glyph_cx, int16_t glyph_cy,
   uint16_t scale_q8 = (uint16_t)round(scale_f * (float)(1<<LOG_Q));
   uint16_t persp_idx = (uint16_t)min(255, max(0, (int)round((glyph_cy / (float)tft.height()) * 255.0f)));
   uint16_t persp_q8 = perspective_scale_table_q8[persp_idx];
+  // result of fast_log_mul_u16 of two Q8.8 is Q16.16. Shift >>8 to get Q8.8.
   uint32_t combined_q = fast_log_mul_u16(scale_q8, persp_q8);
   bench_record_mul(scale_q8, persp_q8);
   uint16_t combined_q8 = (uint16_t)(combined_q >> LOG_Q); // Q8.8 scale
@@ -256,8 +262,10 @@ void rasterize_glyph_to_tile(int gidx, int16_t glyph_cx, int16_t glyph_cy,
       uint16_t asx = (uint16_t)min((uint32_t)abs(sx_q8), (uint32_t)65535);
       uint16_t asy = (uint16_t)min((uint32_t)abs(sy_q8), (uint32_t)65535);
 
-      uint32_t sx_scaled = fast_log_mul_u16(asx, combined_q8);
-      uint32_t sy_scaled = fast_log_mul_u16(asy, combined_q8);
+      // fast_log_mul returns approx product of integers.
+      // since both inputs are Q8.8, product is Q16.16. Shift >>8 to get Q16.8 result.
+      uint32_t sx_scaled = fast_log_mul_u16(asx, combined_q8) >> LOG_Q;
+      uint32_t sy_scaled = fast_log_mul_u16(asy, combined_q8) >> LOG_Q;
       bench_record_mul(asx, combined_q8);
       bench_record_mul(asy, combined_q8);
 
