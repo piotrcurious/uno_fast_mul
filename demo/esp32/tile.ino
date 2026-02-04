@@ -45,18 +45,23 @@ static inline int32_t fast_log2_q8_8(uint16_t v) {
 }
 
 static inline uint32_t fast_exp2_from_q8_8(int32_t log_q8_8) {
-  if (log_q8_8 <= INT32_MIN/2) return 0;
+  if (log_q8_8 <= -32768) return 0;
   int32_t integer = log_q8_8 >> LOG_Q;
   uint8_t frac = (uint8_t)(log_q8_8 & 0xFF);
-  uint16_t frac_val = exp2_table_q8[frac];
-  if (integer >= 31) return 0xFFFFFFFFUL;
-  else if (integer >= 0) {
-    uint32_t v = ((uint32_t)frac_val << integer) >> LOG_Q;
-    return v;
+  uint16_t exp_frac = exp2_table_q8[frac];
+  if (integer >= 32) {
+    return 0xFFFFFFFFUL;
+  } else if (integer >= 8) {
+    uint32_t val = (uint32_t)exp_frac << (integer - 8);
+    return val;
+  } else if (integer >= 0) {
+    uint32_t val = (uint32_t)exp_frac >> (8 - integer);
+    return val;
   } else {
     int shift = -integer;
-    uint32_t v = ((uint32_t)frac_val) >> (LOG_Q + shift - 0);
-    return v;
+    if (shift >= 24) return 0;
+    uint32_t val = ((uint32_t)exp_frac) >> (8 + shift);
+    return val;
   }
 }
 
@@ -176,8 +181,10 @@ void rasterize_glyph_into_tile(char ch, int16_t cx, int16_t cy, float scale_f, f
       uint16_t asx = (uint16_t)min((uint32_t)abs((int32_t)sx_q8), (uint32_t)65535);
       uint16_t asy = (uint16_t)min((uint32_t)abs((int32_t)sy_q8), (uint32_t)65535);
 
-      uint32_t sx_scaled = fast_log_mul_u16(asx, combined_scale_q8); // approx Q8.8*Q8.8 -> Q? (we'll shift)
-      uint32_t sy_scaled = fast_log_mul_u16(asy, combined_scale_q8);
+      // fast_log_mul returns approx product of integers.
+      // since both inputs are Q8.8, product is Q16.16. Shift >>8 to get Q8.8 result.
+      uint32_t sx_scaled = fast_log_mul_u16(asx, combined_scale_q8) >> LOG_Q;
+      uint32_t sy_scaled = fast_log_mul_u16(asy, combined_scale_q8) >> LOG_Q;
       bench_record_mul(asx, combined_scale_q8);
       bench_record_mul(asy, combined_scale_q8);
 
