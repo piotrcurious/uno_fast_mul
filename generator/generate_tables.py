@@ -103,35 +103,71 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", "-o", default="arduino_tables_generated")
     parser.add_argument("--emit-c", action="store_true")
+    parser.add_argument("--progmem-macro", default="PROGMEM")
     parser.add_argument("--log-q", type=int, default=8)
+    parser.add_argument("--msb-size", type=int, default=256)
+    parser.add_argument("--log-size", type=int, default=256)
+    parser.add_argument("--exp-frac-size", type=int, default=256)
     parser.add_argument("--sin-cos-size", type=int, default=512)
     parser.add_argument("--sin-cos-q", type=int, default=15)
+    parser.add_argument("--persp-size", type=int, default=256)
+    parser.add_argument("--persp-q", type=int, default=8)
+    parser.add_argument("--persp-focal", type=float, default=256.0)
+    parser.add_argument("--persp-zmin", type=float, default=0.0)
+    parser.add_argument("--persp-zmax", type=float, default=1024.0)
+    parser.add_argument("--sphere-theta-steps", type=int, default=128)
+    parser.add_argument("--sphere-q", type=int, default=15)
+    parser.add_argument("--gen-atan", action="store_true")
+    parser.add_argument("--atan-size", type=int, default=1024)
+    parser.add_argument("--atan-q", type=int, default=15)
+    parser.add_argument("--atan-range", type=float, default=4.0)
+    parser.add_argument("--gen-stereo", action="store_true")
+    parser.add_argument("--stereo-size", type=int, default=256)
+    parser.add_argument("--stereo-q", type=int, default=12)
     args = parser.parse_args()
 
     base = Path(args.out)
     header_path = base.with_suffix(".h")
 
-    msb = gen_msb_table(256)
-    log2 = gen_log2_table(256, q=args.log_q)
-    exp2 = gen_exp2_frac_table(256, q=args.log_q)
-    sin_tbl, cos_tbl = gen_sin_cos_table(args.sin_cos_size, q=args.sin_cos_q)
-    persp = gen_perspective_table(256, q=8)
-    s_sin, s_cos = gen_sphere_theta_tables(128, q=15)
-    atan_tbl = gen_atan_table(1024, q=15)
-    stereo = gen_stereographic_table(256, q=12)
+    arrays = []
 
-    arrays = [
-        ("uint8_t", "msb_table", msb),
-        ("uint16_t", f"log2_table_q{args.log_q}", log2),
-        ("uint16_t", f"exp2_table_q{args.log_q}", exp2),
-        ("int16_t", f"sin_table_q{args.sin_cos_q}", sin_tbl),
-        ("int16_t", f"cos_table_q{args.sin_cos_q}", cos_tbl),
-        ("uint16_t", "perspective_scale_table_q8", persp),
-        ("int16_t", "sphere_theta_sin_q15", s_sin),
-        ("int16_t", "sphere_theta_cos_q15", s_cos),
-        ("int16_t", "atan_slope_table_q15", atan_tbl),
-        ("uint16_t", "stereo_radial_table_q12", stereo),
-    ]
+    # MSB
+    msb = gen_msb_table(args.msb_size)
+    arrays.append(("uint8_t", "msb_table", msb))
+
+    # Log2
+    log2 = gen_log2_table(args.log_size, q=args.log_q)
+    arrays.append(("uint16_t", f"log2_table_q{args.log_q}", log2))
+
+    # Exp2
+    exp2 = gen_exp2_frac_table(args.exp_frac_size, q=args.log_q)
+    arrays.append(("uint16_t", f"exp2_table_q{args.log_q}", exp2))
+
+    # Sin/Cos
+    sin_tbl, cos_tbl = gen_sin_cos_table(args.sin_cos_size, q=args.sin_cos_q)
+    arrays.append(("int16_t", f"sin_table_q{args.sin_cos_q}", sin_tbl))
+    arrays.append(("int16_t", f"cos_table_q{args.sin_cos_q}", cos_tbl))
+
+    # Perspective
+    persp = gen_perspective_table(args.persp_size, q=args.persp_q, focal=args.persp_focal, zmin=args.persp_zmin, zmax=args.persp_zmax)
+    persp_type = "uint16_t" if max(persp) <= 0xFFFF else "uint32_t"
+    arrays.append((persp_type, f"perspective_scale_table_q{args.persp_q}", persp))
+
+    # Sphere
+    s_sin, s_cos = gen_sphere_theta_tables(args.sphere_theta_steps, q=args.sphere_q)
+    arrays.append(("int16_t", f"sphere_theta_sin_q{args.sphere_q}", s_sin))
+    arrays.append(("int16_t", f"sphere_theta_cos_q{args.sphere_q}", s_cos))
+
+    # Atan
+    if args.gen_atan:
+        atan_tbl = gen_atan_table(args.atan_size, q=args.atan_q, x_range=args.atan_range)
+        arrays.append(("int16_t", f"atan_slope_table_q{args.atan_q}", atan_tbl))
+
+    # Stereo
+    if args.gen_stereo:
+        stereo = gen_stereographic_table(args.stereo_size, q=args.stereo_q)
+        stereo_type = "uint16_t" if max(stereo) <= 0xFFFF else "uint32_t"
+        arrays.append((stereo_type, f"stereo_radial_table_q{args.stereo_q}", stereo))
 
     # constants
     log_scale = qscale(args.log_q)
@@ -153,26 +189,26 @@ def main():
 
     if args.emit_c:
         for ctype, name, vals in arrays:
-            h_content.append(f"extern const {ctype} PROGMEM {name}[{len(vals)}];")
+            h_content.append(f"extern const {ctype} {args.progmem_macro} {name}[{len(vals)}];")
         h_content.append("")
         for ctype, name, val in constants:
-            h_content.append(f"extern const {ctype} PROGMEM {name};")
+            h_content.append(f"extern const {ctype} {args.progmem_macro} {name};")
         h_content.append(f"\n#endif")
         header_path.write_text("\n".join(h_content))
 
         c_content = [f'#include "{header_path.name}"\n']
         for ctype, name, vals in arrays:
-            c_content.append(fmt_c_array(ctype, name, vals))
+            c_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
         c_content.append("")
         for ctype, name, val in constants:
-            c_content.append(f"const {ctype} PROGMEM {name} = {val};")
+            c_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")
         base.with_suffix(".c").write_text("\n".join(c_content))
     else:
         for ctype, name, vals in arrays:
-            h_content.append(fmt_c_array(ctype, name, vals))
+            h_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
         h_content.append("")
         for ctype, name, val in constants:
-            h_content.append(f"const {ctype} PROGMEM {name} = {val};")
+            h_content.append(f"const {ctype} {args.progmem_macro} {name} = {val};")
         h_content.append(f"\n#endif")
         header_path.write_text("\n".join(h_content))
 
