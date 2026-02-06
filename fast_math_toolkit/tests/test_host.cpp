@@ -44,6 +44,7 @@ void test_fixed() {
     EXPECT_NEAR(q16_to_float(q16_mul_s(a, b)), 3.0f, 0.001f);
     EXPECT_NEAR(q16_to_float(q16_div_s(b, a)), 1.3333f, 0.001f);
     EXPECT_NEAR(q16_to_float(q16_inv_sqrt(q16_from_float(4.0f))), 0.5f, 0.01f);
+    EXPECT_NEAR(q16_to_float(q16_sqrt(q16_from_float(4.0f))), 2.0f, 0.01f);
 }
 
 void test_trig() {
@@ -73,6 +74,20 @@ void test_3d() {
     Quat q = quat_from_axis_angle(0, 0x10000, 0, 16384);
     Vec3 vrq = quat_rotate_vec(q, v1);
     EXPECT_NEAR(q16_to_float(vrq.z), -1.0f, 0.01f);
+
+    Mat3 A = mat3_rotation_euler(0, 16384, 0); // 90 deg around Y
+    Mat3 B = mat3_rotation_euler(0, 0, 16384); // 90 deg around Z
+    Mat3 C = mat3_mul_mat(&A, &B);
+    Vec3 vr = mat3_mul_vec(&C, v1);
+    // Rotate (1,0,0) by Z then Y -> (0,1,0) then (0,1,0) wait.
+    // Z rotate (1,0,0) -> (0,1,0). Y rotate (0,1,0) -> (0,1,0).
+    EXPECT_NEAR(q16_to_float(vr.y), 1.0f, 0.01f);
+
+    Quat q1 = quat_from_axis_angle(0, 0x10000, 0, 16384);
+    Quat q2 = quat_from_axis_angle(0, 0x10000, 0, 16384);
+    Quat q3 = quat_mul_quat(q1, q2); // 180 deg around Y
+    Vec3 vr2 = quat_rotate_vec(q3, v1);
+    EXPECT_NEAR(q16_to_float(vr2.x), -1.0f, 0.01f);
 }
 
 void test_ring() {
@@ -81,6 +96,21 @@ void test_ring() {
     Log32 lb = to_log32(5);
     EXPECT_NEAR(from_log32(log32_mul(la, lb)), 500, 5);
     EXPECT_NEAR(from_log32(log32_div(la, lb)), 20, 1);
+
+    Log32 lsum = log32_add(to_log32(100), to_log32(200));
+    EXPECT_NEAR(from_log32(lsum), 300, 5);
+}
+
+void test_fused_pipeline() {
+    std::cout << "Testing Fused Pipeline..." << std::endl;
+    Vec3 v = {0, 0x10000, 0}; // (0,1,0)
+    Vec3 trans = {0, 0, 0x200000}; // 32 in Z
+    int32_t focal = 0x1000000; // 256
+
+    Vec3 vp1 = pipeline_mvp(v, 0x10000, 0, 0, 0, trans, focal);
+    Vec3 vp2 = pipeline_mvp_fused(v, 0x10000, 0, 0, 0, trans, focal);
+
+    EXPECT_NEAR(q16_to_float(vp1.y), q16_to_float(vp2.y), 0.1f);
 }
 
 void test_utils() {
@@ -95,6 +125,7 @@ int main() {
     test_trig();
     test_3d();
     test_ring();
+    test_fused_pipeline();
     test_utils();
     std::cout << "Host tests completed." << std::endl;
     return 0;
