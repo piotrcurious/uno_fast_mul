@@ -227,7 +227,7 @@ def main():
     ]
 
     guard = base.name.upper() + "_H"
-    h_content = [f"#ifndef {guard}", f"#define {guard}", '#include <stdint.h>', '#ifdef ARDUINO', '#include <pgmspace.h>', '#else', '#ifndef PROGMEM', '#define PROGMEM', '#endif', '#endif\n']
+    h_content = [f"#ifndef {guard}", f"#define {guard}", '#include <stdint.h>', '#ifdef ARDUINO', '#include <avr/pgmspace.h>', '#else', '#ifndef PROGMEM', '#define PROGMEM', '#endif', '#endif\n']
 
     if args.emit_c:
         for ctype, name, vals in arrays:
