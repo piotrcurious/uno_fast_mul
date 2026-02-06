@@ -59,8 +59,19 @@ if command -v simavr &> /dev/null && command -v avr-gcc &> /dev/null; then
     timeout 5s simavr -m atmega328p avr_float_test.elf || true
     echo -e "${GREEN}AVR Emulation Tests completed.${NC}"
     cd ..
-else
-    echo -e "\n${YELLOW}Skipping AVR Emulation Test (simavr or avr-gcc not found).${NC}"
 fi
+
+# 4. New Fast Math Toolkit Tests
+echo -e "\n${GREEN}4. Running New Fast Math Toolkit Tests...${NC}"
+cd fast_math_toolkit/tests
+make clean
+make
+echo -e "Running host tests:"
+./test_host
+if command -v simavr &> /dev/null && command -v avr-gcc &> /dev/null; then
+    echo -e "\nRunning AVR benchmarks:"
+    make run_avr
+fi
+cd ../..
 
 echo -e "\n${YELLOW}=== All Tests Completed ===${NC}"
