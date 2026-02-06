@@ -22,12 +22,11 @@
 namespace FMT {
 
 static inline int fast_msb32(uint32_t v) {
-    if (!v) return -1;
-    if (v & 0xFFFF0000u) {
-        uint16_t h = (uint16_t)(v >> 16);
-        return (h >> 8) ? 24 + FMT_READ8(msb_table, h >> 8) : 16 + FMT_READ8(msb_table, h & 0xFF);
-    }
-    return (v >> 8) ? 8 + FMT_READ8(msb_table, v >> 8) : FMT_READ8(msb_table, v & 0xFF);
+    if (v & 0xFF000000UL) return 24 + FMT_READ8(msb_table, (uint8_t)(v >> 24));
+    if (v & 0x00FF0000UL) return 16 + FMT_READ8(msb_table, (uint8_t)(v >> 16));
+    if (v & 0x0000FF00UL) return 8  + FMT_READ8(msb_table, (uint8_t)(v >> 8));
+    if (v & 0x000000FFUL) return FMT_READ8(msb_table, (uint8_t)v);
+    return -1;
 }
 
 // Q8.8 Log/Exp pipeline
@@ -39,10 +38,20 @@ static inline int32_t log2_q8(uint32_t v) {
     if (!v) return -2147483647L - 1L; // INT32_MIN
     int e = fast_msb32(v);
     uint8_t m;
-    if (e >= 7) {
-        m = (uint8_t)(v >> (e - 7));
+    int s = e - 7;
+    if (s >= 0) {
+        if (s >= 16) { v >>= 16; s -= 16; }
+        if (s >= 8)  { v >>= 8;  s -= 8;  }
+        if (s >= 4)  { v >>= 4;  s -= 4;  }
+        if (s >= 2)  { v >>= 2;  s -= 2;  }
+        if (s >= 1)  { v >>= 1;  s -= 1;  }
+        m = (uint8_t)v;
     } else {
-        m = (uint8_t)(v << (7 - e));
+        s = -s;
+        if (s >= 4)  { v <<= 4;  s -= 4;  }
+        if (s >= 2)  { v <<= 2;  s -= 2;  }
+        if (s >= 1)  { v <<= 1;  s -= 1;  }
+        m = (uint8_t)v;
     }
     return ((int32_t)(e - 7) << FMT_LOG_Q) + FMT_READ16(log2_table_q8, m);
 }

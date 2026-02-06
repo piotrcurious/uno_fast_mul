@@ -28,13 +28,16 @@ inline uint16_t stop_timer() {
     return t;
 }
 
-__attribute__((noinline)) FMT::Vec3 test_pipeline(FMT::Vec3 v, int32_t scale, uint16_t ax, uint16_t ay, uint16_t az, FMT::Vec3 trans, int32_t focal) {
-    return FMT::pipeline_mvp(v, scale, ax, ay, az, trans, focal);
-}
+volatile int32_t g_sink;
 
-__attribute__((noinline)) FMT::Vec3 test_pipeline_fused(FMT::Vec3 v, int32_t scale, uint16_t ax, uint16_t ay, uint16_t az, FMT::Vec3 trans, int32_t focal) {
-    return FMT::pipeline_mvp_fused(v, scale, ax, ay, az, trans, focal);
-}
+// Wrapper functions to ensure realistic cycle counts
+__attribute__((noinline)) int32_t bench_log2(uint32_t v) { return FMT::log2_q8(v); }
+__attribute__((noinline)) uint32_t bench_exp2(int32_t v) { return FMT::exp2_q8(v); }
+__attribute__((noinline)) int32_t bench_q16_mul_s(int32_t a, int32_t b) { return FMT::q16_mul_s(a, b); }
+__attribute__((noinline)) int32_t bench_q16_div_s(int32_t a, int32_t b) { return FMT::q16_div_s(a, b); }
+__attribute__((noinline)) int32_t bench_q16_div_s_ap(int32_t a, int32_t b) { return FMT::q16_div_s_ap(a, b); }
+__attribute__((noinline)) FMT::Vec3 bench_mat3_mul_vec(const FMT::Mat3* M, FMT::Vec3 v) { return FMT::mat3_mul_vec(M, v); }
+__attribute__((noinline)) FMT::Vec3 bench_quat_rotate_vec(FMT::Quat q, FMT::Vec3 v) { return FMT::quat_rotate_vec(q, v); }
 
 int main(void) {
     UBRR0H = 0;
@@ -47,24 +50,56 @@ int main(void) {
 
     init_timer();
 
-    printf("AVR FMT Ring/Fused Benchmarks\n");
+    printf("AVR FMT Final Benchmarks\n");
 
-    FMT::Vec3 v = {0, 0x10000, 0};
-    int32_t scale = 0x10000;
-    FMT::Vec3 trans = {0, 0, 0x200000};
-    int32_t focal = 0x1000000;
+    uint32_t u1 = 1234567;
+    int32_t s1 = 123456, s2 = -123;
+
+    asm volatile("" : "+r"(u1), "+r"(s1), "+r"(s2));
 
     start_timer();
-    FMT::Vec3 r1 = test_pipeline(v, scale, 0, 0, 0, trans, focal);
+    g_sink = bench_log2(u1);
     uint16_t c1 = stop_timer();
-    printf("pipeline_mvp: %u cycles\n", c1 - 4);
+    printf("log2_q8: %u cycles\n", c1 - 4);
 
     start_timer();
-    FMT::Vec3 r2 = test_pipeline_fused(v, scale, 0, 0, 0, trans, focal);
+    g_sink = bench_exp2(s1);
     uint16_t c2 = stop_timer();
-    printf("pipeline_mvp_fused: %u cycles\n", c2 - 4);
+    printf("exp2_q8: %u cycles\n", c2 - 4);
 
-    printf("DONE %ld %ld\n", r1.y, r2.y);
+    start_timer();
+    g_sink = bench_q16_mul_s(s1, s2);
+    uint16_t c3 = stop_timer();
+    printf("q16_mul_s: %u cycles\n", c3 - 4);
+
+    start_timer();
+    g_sink = bench_q16_div_s(s1, s2);
+    uint16_t c4 = stop_timer();
+    printf("q16_div_s (exact): %u cycles\n", c4 - 4);
+
+    start_timer();
+    g_sink = bench_q16_div_s_ap(s1, s2);
+    uint16_t c4ap = stop_timer();
+    printf("q16_div_s (approx): %u cycles\n", c4ap - 4);
+
+    FMT::Vec3 v1 = {0x10000, 0, 0};
+    FMT::Mat3 M = {{ {0x10000, 0, 0}, {0, 0x10000, 0}, {0, 0, 0x10000} }};
+    FMT::Quat Q = {0x10000, 0, 0, 0};
+    asm volatile("" : "+g"(v1), "+g"(M), "+g"(Q));
+
+    start_timer();
+    FMT::Vec3 rv1 = bench_mat3_mul_vec(&M, v1);
+    uint16_t c6 = stop_timer();
+    g_sink = rv1.x;
+    printf("mat3_mul_vec: %u cycles\n", c6 - 4);
+
+    start_timer();
+    FMT::Vec3 rv2 = bench_quat_rotate_vec(Q, v1);
+    uint16_t c7 = stop_timer();
+    g_sink = rv2.x;
+    printf("quat_rotate_vec: %u cycles\n", c7 - 4);
+
+    printf("DONE\n");
     while(1);
     return 0;
 }

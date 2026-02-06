@@ -32,13 +32,13 @@ static inline Vec3 vec3_sub(Vec3 a, Vec3 b) {
 }
 
 static inline int32_t vec3_dot(Vec3 a, Vec3 b) {
-    return q16_mul_s(a.x, b.x) + q16_mul_s(a.y, b.y) + q16_mul_s(a.z, b.z);
+    return (int32_t)(((int64_t)a.x * b.x + (int64_t)a.y * b.y + (int64_t)a.z * b.z) >> Q16_S);
 }
 
 static inline Vec3 vec3_cross(Vec3 a, Vec3 b) {
-    return vec3_init(q16_mul_s(a.y, b.z) - q16_mul_s(a.z, b.y),
-                     q16_mul_s(a.z, b.x) - q16_mul_s(a.x, b.z),
-                     q16_mul_s(a.x, b.y) - q16_mul_s(a.y, b.x));
+    return vec3_init((int32_t)(((int64_t)a.y * b.z - (int64_t)a.z * b.y) >> Q16_S),
+                     (int32_t)(((int64_t)a.z * b.x - (int64_t)a.x * b.z) >> Q16_S),
+                     (int32_t)(((int64_t)a.x * b.y - (int64_t)a.y * b.x) >> Q16_S));
 }
 
 static inline Vec3 vec3_normalize(Vec3 v) {
@@ -50,9 +50,9 @@ static inline Vec3 vec3_normalize(Vec3 v) {
 
 static inline Vec3 mat3_mul_vec(const Mat3 *M, Vec3 v) {
     Vec3 r;
-    r.x = q16_mul_s(M->m[0][0], v.x) + q16_mul_s(M->m[0][1], v.y) + q16_mul_s(M->m[0][2], v.z);
-    r.y = q16_mul_s(M->m[1][0], v.x) + q16_mul_s(M->m[1][1], v.y) + q16_mul_s(M->m[1][2], v.z);
-    r.z = q16_mul_s(M->m[2][0], v.x) + q16_mul_s(M->m[2][1], v.y) + q16_mul_s(M->m[2][2], v.z);
+    r.x = (int32_t)(((int64_t)M->m[0][0] * v.x + (int64_t)M->m[0][1] * v.y + (int64_t)M->m[0][2] * v.z) >> Q16_S);
+    r.y = (int32_t)(((int64_t)M->m[1][0] * v.x + (int64_t)M->m[1][1] * v.y + (int64_t)M->m[1][2] * v.z) >> Q16_S);
+    r.z = (int32_t)(((int64_t)M->m[2][0] * v.x + (int64_t)M->m[2][1] * v.y + (int64_t)M->m[2][2] * v.z) >> Q16_S);
     return r;
 }
 
@@ -94,13 +94,13 @@ static inline Quat quat_from_axis_angle(int32_t ax, int32_t ay, int32_t az, uint
 
 static inline Vec3 quat_rotate_vec(Quat q, Vec3 v) {
     // v' = v + 2*q_vec x (q_vec x v + q.w * v)
-    int32_t tx = 2 * (q16_mul_s(q.y, v.z) - q16_mul_s(q.z, v.y));
-    int32_t ty = 2 * (q16_mul_s(q.z, v.x) - q16_mul_s(q.x, v.z));
-    int32_t tz = 2 * (q16_mul_s(q.x, v.y) - q16_mul_s(q.y, v.x));
+    int32_t tx = (int32_t)(((int64_t)q.y * v.z - (int64_t)q.z * v.y) >> (Q16_S - 1));
+    int32_t ty = (int32_t)(((int64_t)q.z * v.x - (int64_t)q.x * v.z) >> (Q16_S - 1));
+    int32_t tz = (int32_t)(((int64_t)q.x * v.y - (int64_t)q.y * v.x) >> (Q16_S - 1));
 
-    int32_t res_x = v.x + q16_mul_s(q.w, tx) + (q16_mul_s(q.y, tz) - q16_mul_s(q.z, ty));
-    int32_t res_y = v.y + q16_mul_s(q.w, ty) + (q16_mul_s(q.z, tx) - q16_mul_s(q.x, tz));
-    int32_t res_z = v.z + q16_mul_s(q.w, tz) + (q16_mul_s(q.x, ty) - q16_mul_s(q.y, tx));
+    int32_t res_x = v.x + (int32_t)(((int64_t)q.w * tx + (int64_t)q.y * tz - (int64_t)q.z * ty) >> Q16_S);
+    int32_t res_y = v.y + (int32_t)(((int64_t)q.w * ty + (int64_t)q.z * tx - (int64_t)q.x * tz) >> Q16_S);
+    int32_t res_z = v.z + (int32_t)(((int64_t)q.w * tz + (int64_t)q.x * ty - (int64_t)q.y * tx) >> Q16_S);
     return vec3_init(res_x, res_y, res_z);
 }
 

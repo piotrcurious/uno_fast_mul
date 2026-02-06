@@ -24,6 +24,15 @@ static inline int32_t  q16_div_s(int32_t a, int32_t b)  {
 }
 
 // Q16.16 Approximate (faster on some platforms, or for special cases)
+static inline int32_t q16_div_s_ap(int32_t a, int32_t b) {
+    bool n = (a < 0) ^ (b < 0);
+    uint32_t ua = (a < 0) ? -(uint32_t)a : (uint32_t)a;
+    uint32_t ub = (b < 0) ? -(uint32_t)b : (uint32_t)b;
+    if (!ub) return n ? -2147483647L - 1L : 2147483647L;
+    int32_t res = (int32_t)exp2_q8(log2_q8(ua) - log2_q8(ub) + (16L << FMT_LOG_Q));
+    return n ? -res : res;
+}
+
 static inline uint32_t q16_mul_u_ap(uint32_t a, uint32_t b) {
     if (!a || !b) return 0;
     // log(a*b / 2^16) = log(a) + log(b) - 16*log(2)
