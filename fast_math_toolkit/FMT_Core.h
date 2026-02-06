@@ -35,23 +35,30 @@ static inline int fast_msb32(uint32_t v) {
 #endif
 
 static inline int32_t log2_q8(uint32_t v) {
-    if (!v) return -2147483647L - 1L; // INT32_MIN
-    int e = fast_msb32(v);
+    if (!v) return -2147483647L - 1L;
+    int e;
     uint8_t m;
-    int s = e - 7;
-    if (s >= 0) {
-        if (s >= 16) { v >>= 16; s -= 16; }
-        if (s >= 8)  { v >>= 8;  s -= 8;  }
-        if (s >= 4)  { v >>= 4;  s -= 4;  }
-        if (s >= 2)  { v >>= 2;  s -= 2;  }
-        if (s >= 1)  { v >>= 1;  s -= 1;  }
-        m = (uint8_t)v;
+    if (v & 0xFF000000UL) {
+        uint8_t t = (uint8_t)(v >> 24);
+        e = 24 + FMT_READ8(msb_table, t);
+        uint16_t w = (uint16_t)(v >> 16);
+        int s = e - 23; // shift amount for the 16-bit word to get top 8 bits
+        m = (uint8_t)(w >> s);
+    } else if (v & 0x00FF0000UL) {
+        uint8_t t = (uint8_t)(v >> 16);
+        e = 16 + FMT_READ8(msb_table, t);
+        uint16_t w = (uint16_t)(v >> 8);
+        int s = e - 15;
+        m = (uint8_t)(w >> s);
+    } else if (v & 0x0000FF00UL) {
+        uint8_t t = (uint8_t)(v >> 8);
+        e = 8 + FMT_READ8(msb_table, t);
+        int s = e - 7;
+        m = (uint8_t)(v >> s);
     } else {
-        s = -s;
-        if (s >= 4)  { v <<= 4;  s -= 4;  }
-        if (s >= 2)  { v <<= 2;  s -= 2;  }
-        if (s >= 1)  { v <<= 1;  s -= 1;  }
-        m = (uint8_t)v;
+        e = FMT_READ8(msb_table, (uint8_t)v);
+        int s = 7 - e;
+        m = (uint8_t)(v << s);
     }
     return ((int32_t)(e - 7) << FMT_LOG_Q) + FMT_READ16(log2_table_q8, m);
 }

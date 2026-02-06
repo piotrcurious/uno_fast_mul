@@ -110,6 +110,17 @@ def gen_stereographic_table(n=256, q=12):
     scale = qscale(q)
     return [round((2.0 / (1.0 + ((i/(n-1))*2.0)**2)) * scale) for i in range(n)]
 
+def gen_lse_table(n=256, q=8, x_range=8.0):
+    # f(x) = log2(1 + 2^-x) for x in [0, x_range]
+    # We use -x because for LogSumExp(a, b) = max(a,b) + log2(1 + 2^-|a-b|)
+    scale = qscale(q)
+    tbl = []
+    for i in range(n):
+        x = x_range * i / (n - 1)
+        val = math.log2(1 + 2**(-x))
+        tbl.append(round(val * scale))
+    return tbl
+
 def rasterize_font(ttf_path, size, chars, glyph_w=None, glyph_h=None, mono_threshold=128):
     if not PILLOW_INSTALLED:
         raise ImportError("Pillow is required for font rasterization. Install it with 'pip install pillow'.")
@@ -167,6 +178,7 @@ def main():
     parser.add_argument("--glyph-chars", default=" !?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ")
     parser.add_argument("--glyph-w", type=int, default=None)
     parser.add_argument("--glyph-h", type=int, default=None)
+    parser.add_argument("--gen-lse", action="store_true", help="Generate LogSumExp table")
     args = parser.parse_args()
 
     base = Path(args.out)
@@ -197,6 +209,10 @@ def main():
     if args.gen_stereo:
         stereo = gen_stereographic_table(args.stereo_size, q=args.stereo_q)
         arrays.append(("uint16_t" if max(stereo) <= 0xFFFF else "uint32_t", f"stereo_radial_table_q{args.stereo_q}", stereo))
+
+    if args.gen_lse:
+        lse = gen_lse_table(256, q=args.log_q)
+        arrays.append(("uint16_t", "lse_table_q8", lse))
 
     if args.gen_float:
         l_t1, l_t2 = gen_btm_log2(4, 5, 5)
@@ -232,6 +248,7 @@ def main():
     if args.emit_c:
         for ctype, name, vals in arrays:
             h_content.append(f"extern const {ctype} {args.progmem_macro} {name}[{len(vals)}];")
+            h_content.append(f"#define {name.upper()}_SIZE {len(vals)}")
         if glyph_meta:
             gh = glyph_meta['height']
             glyph_type = "uint8_t"
@@ -271,6 +288,7 @@ def main():
         base.with_suffix(".cpp").write_text("\n".join(c_content))
     else:
         for ctype, name, vals in arrays:
+            h_content.append(f"#define {name.upper()}_SIZE {len(vals)}")
             h_content.append(fmt_c_array(ctype, name, vals, progmem_macro=args.progmem_macro))
         if glyph_meta:
             gh = glyph_meta['height']

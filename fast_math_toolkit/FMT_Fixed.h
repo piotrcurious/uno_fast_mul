@@ -50,6 +50,15 @@ static inline uint32_t q16_inv_sqrt(uint32_t x) {
     return exp2_q8((24L << FMT_LOG_Q) - (lx >> 1));
 }
 
+static inline uint32_t q16_sqrt(uint32_t x) {
+    if (!x) return 0;
+    int32_t lx = log2_q8(x);
+    // lx = log2(x_linear) + 16.0 (in log space)
+    // we want log2(sqrt(x_linear)) + 16.0
+    // = 0.5 * (lx - 16.0) + 16.0 = 0.5*lx - 8.0 + 16.0 = 0.5*lx + 8.0
+    return exp2_q8((lx >> 1) + (8L << FMT_LOG_Q));
+}
+
 } // namespace FMT
 
 #endif

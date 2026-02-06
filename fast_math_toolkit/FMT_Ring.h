@@ -74,6 +74,44 @@ static inline Log32 log32_pow(Log32 a, float k) {
     return r;
 }
 
+static inline Log32 log32_add(Log32 a, Log32 b) {
+    if (a.sign == 0) return b;
+    if (b.sign == 0) return a;
+
+    if (a.sign == b.sign) {
+        // LogSumExp: log(2^a + 2^b) = max(a,b) + log2(1 + 2^-|a-b|)
+        Log32 r;
+        r.sign = a.sign;
+        int32_t diff = a.lval - b.lval;
+        if (diff >= 0) {
+            // a is larger or equal
+            // diff is 0..inf.
+            // We use table for log2(1 + 2^-diff)
+            // diff is Q8.8. Table covers 0..8.0
+            // Wait, if table size 256 covers 0..8, then idx = diff / (8/256) = diff * 32.
+            // But if table size 256 covers 0..8, then each entry is 8/256 = 1/32 log units.
+            // My gen_lse_table(256, q=8, x_range=8.0)
+            // idx = (x / x_range) * (n-1) = (diff/256 / 8) * 255 = diff * 255 / 2048 approx.
+            // Let's use simpler indexing: idx = diff >> 3 (since 2^3=8) if we want 1/256 resolution? No.
+            // If x_range is 8.0, and n is 256, then idx = diff >> 3. (because diff is Q8.8, diff>>8 is integer, diff>>3 is integer*32).
+            uint16_t table_idx = (diff >> 3);
+            if (table_idx > 255) table_idx = 255;
+            r.lval = a.lval + FMT_READ16(lse_table_q8, table_idx);
+        } else {
+            diff = -diff;
+            uint16_t table_idx = (diff >> 3);
+            if (table_idx > 255) table_idx = 255;
+            r.lval = b.lval + FMT_READ16(lse_table_q8, table_idx);
+        }
+        return r;
+    } else {
+        // LogSubExp: log(2^a - 2^b). Tricky.
+        // For simplicity, we convert to linear or ignore for now.
+        // Usually 3D math has more additions of positive terms (like dot products of squares).
+        return to_log32(from_log32(a) + from_log32(b));
+    }
+}
+
 } // namespace FMT
 
 #endif
