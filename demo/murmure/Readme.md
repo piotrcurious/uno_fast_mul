@@ -1,2 +1,1 @@
-small demo.
-It doesn't work.
+small demo

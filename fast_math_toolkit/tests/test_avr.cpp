@@ -44,8 +44,10 @@ __attribute__((noinline)) FMT::Quat bench_quat_normalize(FMT::Quat q) { return F
 __attribute__((noinline)) int32_t bench_vec3_length(FMT::Vec3 v) { return FMT::vec3_length(v); }
 __attribute__((noinline)) FMT::Log32 bench_log32_add(FMT::Log32 a, FMT::Log32 b) { return FMT::log32_add(a, b); }
 __attribute__((noinline)) int16_t bench_sin(uint16_t a) { return FMT::sin_u16(a); }
+__attribute__((noinline)) uint16_t bench_atan2(int32_t y, int32_t x) { return FMT::atan2_u16(y, x); }
 __attribute__((noinline)) FMT::Mat3 bench_rotation(uint16_t x, uint16_t y, uint16_t z) { return FMT::mat3_rotation_euler(x, y, z); }
 __attribute__((noinline)) FMT::Mat4 bench_mat4_mul(const FMT::Mat4* A, const FMT::Mat4* B) { return FMT::mat4_mul(A, B); }
+__attribute__((noinline)) FMT::Mat4 bench_mat4_mul_affine(const FMT::Mat4* A, const FMT::Mat4* B) { return FMT::mat4_mul_affine(A, B); }
 
 int main(void) {
     UBRR0H = 0;
@@ -146,11 +148,23 @@ int main(void) {
     printf("sin_u16: %u cycles\n", c8 - 4);
 
     start_timer();
+    uint16_t a16 = bench_atan2(s1, s2);
+    uint16_t c8a = stop_timer();
+    g_sink = a16;
+    printf("atan2_u16: %u cycles\n", c8a - 4);
+
+    start_timer();
     FMT::Mat4 M4 = FMT::mat4_identity();
     FMT::Mat4 RM4 = bench_mat4_mul(&M4, &M4);
     uint16_t c10 = stop_timer();
     g_sink = RM4.m[0][0];
     printf("mat4_mul: %u cycles\n", c10 - 4);
+
+    start_timer();
+    FMT::Mat4 RM4a = bench_mat4_mul_affine(&M4, &M4);
+    uint16_t c10a = stop_timer();
+    g_sink = RM4a.m[0][0];
+    printf("mat4_mul_affine: %u cycles\n", c10a - 4);
 
     start_timer();
     FMT::Mat3 RM2 = bench_rotation(0, 16384, 0);

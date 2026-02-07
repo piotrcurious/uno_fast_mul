@@ -149,13 +149,25 @@ static inline Mat4 mat4_mul(const Mat4 *A, const Mat4 *B) {
     Mat4 R;
     for (int i = 0; i < 4; i++) {
         int32_t a0 = A->m[i][0], a1 = A->m[i][1], a2 = A->m[i][2], a3 = A->m[i][3];
-        for (int j = 0; j < 4; j++) {
-            R.m[i][j] = (int32_t)(((int64_t)a0 * B->m[0][j] +
-                                   (int64_t)a1 * B->m[1][j] +
-                                   (int64_t)a2 * B->m[2][j] +
-                                   (int64_t)a3 * B->m[3][j]) >> Q16_S);
-        }
+        R.m[i][0] = (int32_t)(((int64_t)a0 * B->m[0][0] + (int64_t)a1 * B->m[1][0] + (int64_t)a2 * B->m[2][0] + (int64_t)a3 * B->m[3][0]) >> Q16_S);
+        R.m[i][1] = (int32_t)(((int64_t)a0 * B->m[0][1] + (int64_t)a1 * B->m[1][1] + (int64_t)a2 * B->m[2][1] + (int64_t)a3 * B->m[3][1]) >> Q16_S);
+        R.m[i][2] = (int32_t)(((int64_t)a0 * B->m[0][2] + (int64_t)a1 * B->m[1][2] + (int64_t)a2 * B->m[2][2] + (int64_t)a3 * B->m[3][2]) >> Q16_S);
+        R.m[i][3] = (int32_t)(((int64_t)a0 * B->m[0][3] + (int64_t)a1 * B->m[1][3] + (int64_t)a2 * B->m[2][3] + (int64_t)a3 * B->m[3][3]) >> Q16_S);
     }
+    return R;
+}
+
+static inline Mat4 mat4_mul_affine(const Mat4 *A, const Mat4 *B) {
+    Mat4 R;
+    // Assume A and B are affine (last row [0 0 0 1])
+    for (int i = 0; i < 3; i++) {
+        int32_t a0 = A->m[i][0], a1 = A->m[i][1], a2 = A->m[i][2], a3 = A->m[i][3];
+        R.m[i][0] = (int32_t)(((int64_t)a0 * B->m[0][0] + (int64_t)a1 * B->m[1][0] + (int64_t)a2 * B->m[2][0]) >> Q16_S);
+        R.m[i][1] = (int32_t)(((int64_t)a0 * B->m[0][1] + (int64_t)a1 * B->m[1][1] + (int64_t)a2 * B->m[2][1]) >> Q16_S);
+        R.m[i][2] = (int32_t)(((int64_t)a0 * B->m[0][2] + (int64_t)a1 * B->m[1][2] + (int64_t)a2 * B->m[2][2]) >> Q16_S);
+        R.m[i][3] = (int32_t)(((int64_t)a0 * B->m[0][3] + (int64_t)a1 * B->m[1][3] + (int64_t)a2 * B->m[2][3]) >> Q16_S) + a3;
+    }
+    R.m[3][0] = 0; R.m[3][1] = 0; R.m[3][2] = 0; R.m[3][3] = Q16_ONE;
     return R;
 }
 
@@ -183,6 +195,23 @@ static inline Mat4 mat4_scaling(int32_t x, int32_t y, int32_t z) {
     r.m[1][1] = y;
     r.m[2][2] = z;
     return r;
+}
+
+static inline Mat4 mat4_inverse_affine_rot(const Mat4 *M) {
+    Mat4 R;
+    // Transpose the 3x3 rotation part
+    R.m[0][0] = M->m[0][0]; R.m[0][1] = M->m[1][0]; R.m[0][2] = M->m[2][0];
+    R.m[1][0] = M->m[0][1]; R.m[1][1] = M->m[1][1]; R.m[1][2] = M->m[2][1];
+    R.m[2][0] = M->m[0][2]; R.m[2][1] = M->m[1][2]; R.m[2][2] = M->m[2][2];
+
+    // New translation = - R^T * t
+    int32_t tx = M->m[0][3], ty = M->m[1][3], tz = M->m[2][3];
+    R.m[0][3] = - (int32_t)(((int64_t)R.m[0][0] * tx + (int64_t)R.m[0][1] * ty + (int64_t)R.m[0][2] * tz) >> Q16_S);
+    R.m[1][3] = - (int32_t)(((int64_t)R.m[1][0] * tx + (int64_t)R.m[1][1] * ty + (int64_t)R.m[1][2] * tz) >> Q16_S);
+    R.m[2][3] = - (int32_t)(((int64_t)R.m[2][0] * tx + (int64_t)R.m[2][1] * ty + (int64_t)R.m[2][2] * tz) >> Q16_S);
+
+    R.m[3][0] = 0; R.m[3][1] = 0; R.m[3][2] = 0; R.m[3][3] = Q16_ONE;
+    return R;
 }
 
 static inline Mat4 mat4_perspective(int32_t focal) {
@@ -295,6 +324,42 @@ static inline Vec3 pipeline_mvp(Vec3 v_local, int32_t scale,
     world.y += trans.y;
     world.z += trans.z;
     return project_perspective(world, focal);
+}
+
+static inline bool ray_sphere_intersect(Vec3 O, Vec3 D, Vec3 C, int32_t r, int32_t *t_out) {
+    Vec3 L = vec3_sub(O, C);
+    int32_t b = vec3_dot(D, L); // Actually D.L
+    int32_t c = vec3_dot(L, L) - q16_mul_s(r, r);
+
+    // Discriminant / 4 = b^2 - c
+    int32_t discr = q16_mul_s(b, b) - c;
+    if (discr < 0) return false;
+
+    int32_t s = (int32_t)q16_sqrt((uint32_t)discr);
+    int32_t t0 = -b - s;
+    int32_t t1 = -b + s;
+
+    if (t0 >= 0) {
+        if (t_out) *t_out = t0;
+        return true;
+    }
+    if (t1 >= 0) {
+        if (t_out) *t_out = t1;
+        return true;
+    }
+    return false;
+}
+
+static inline bool ray_plane_intersect(Vec3 O, Vec3 D, Vec3 n, int32_t d, int32_t *t_out) {
+    int32_t denom = vec3_dot(n, D);
+    if (denom == 0) return false;
+
+    int32_t t = - (vec3_dot(n, O) + d);
+    t = q16_div_s(t, denom);
+
+    if (t < 0) return false;
+    if (t_out) *t_out = t;
+    return true;
 }
 
 static inline Vec3 pipeline_mvp_fused(Vec3 v_local, int32_t scale,
