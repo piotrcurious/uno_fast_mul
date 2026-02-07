@@ -53,9 +53,24 @@ static inline Vec3 vec3_normalize(Vec3 v) {
     int32_t dot = vec3_dot(v, v);
     if (dot <= 0) return v;
     uint32_t isqr = q16_inv_sqrt((uint32_t)dot);
-    // Multiply by inv_sqrt. Since inv_sqrt is already in log-ready format?
-    // No, q16_inv_sqrt returns Q16.16.
     return vec3_init(q16_mul_s(v.x, isqr), q16_mul_s(v.y, isqr), q16_mul_s(v.z, isqr));
+}
+
+static inline Vec3 vec3_normalize_ap(Vec3 v) {
+    int32_t d2 = vec3_dot(v, v);
+    if (d2 <= 0) return v;
+    int32_t log_d2 = log2_q8((uint32_t)d2);
+    int32_t log_isqr = (24L << FMT_LOG_Q) - (log_d2 >> 1);
+    int32_t offset = (16L << FMT_LOG_Q);
+
+    Vec3 r;
+    r.x = (v.x == 0) ? 0 : (int32_t)exp2_q8(log2_q8((uint32_t)(v.x > 0 ? v.x : -v.x)) + log_isqr - offset);
+    if (v.x < 0) r.x = -r.x;
+    r.y = (v.y == 0) ? 0 : (int32_t)exp2_q8(log2_q8((uint32_t)(v.y > 0 ? v.y : -v.y)) + log_isqr - offset);
+    if (v.y < 0) r.y = -r.y;
+    r.z = (v.z == 0) ? 0 : (int32_t)exp2_q8(log2_q8((uint32_t)(v.z > 0 ? v.z : -v.z)) + log_isqr - offset);
+    if (v.z < 0) r.z = -r.z;
+    return r;
 }
 
 static inline int32_t vec3_length(Vec3 v) {
@@ -108,6 +123,26 @@ static inline Mat3 mat3_rotation_euler(uint16_t ax, uint16_t ay, uint16_t az) {
     M.m[2][0] = -sy;
     M.m[2][1] = (int32_t)(((int64_t)cy * sx) >> Q16_S);
     M.m[2][2] = (int32_t)(((int64_t)cy * cx) >> Q16_S);
+    return M;
+}
+
+static inline Mat3 mat3_rotation_euler_ap(uint16_t ax, uint16_t ay, uint16_t az) {
+    Log32 sx = sin_log(ax), cx = cos_log(ax);
+    Log32 sy = sin_log(ay), cy = cos_log(ay);
+    Log32 sz = sin_log(az), cz = cos_log(az);
+
+    Mat3 M;
+    M.m[0][0] = from_log32(log32_mul(cz, cy));
+    M.m[0][1] = from_log32(log32_mul(log32_mul(cz, sy), sx)) - from_log32(log32_mul(sz, cx));
+    M.m[0][2] = from_log32(log32_mul(log32_mul(cz, sy), cx)) + from_log32(log32_mul(sz, sx));
+
+    M.m[1][0] = from_log32(log32_mul(sz, cy));
+    M.m[1][1] = from_log32(log32_mul(log32_mul(sz, sy), sx)) + from_log32(log32_mul(cz, cx));
+    M.m[1][2] = from_log32(log32_mul(log32_mul(sz, sy), cx)) - from_log32(log32_mul(cz, sx));
+
+    M.m[2][0] = -from_log32(sy);
+    M.m[2][1] = from_log32(log32_mul(cy, sx));
+    M.m[2][2] = from_log32(log32_mul(cy, cx));
     return M;
 }
 
