@@ -88,6 +88,16 @@ void test_3d() {
     Quat q3 = quat_mul_quat(q1, q2); // 180 deg around Y
     Vec3 vr2 = quat_rotate_vec(q3, v1);
     EXPECT_NEAR(q16_to_float(vr2.x), -1.0f, 0.01f);
+
+    Mat4 M1 = mat4_translation(q16_from_float(10.0f), 0, 0);
+    Mat4 M2 = mat4_translation(0, q16_from_float(5.0f), 0);
+    Mat4 M3 = mat4_mul(&M1, &M2);
+    EXPECT_NEAR(q16_to_float(M3.m[0][3]), 10.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(M3.m[1][3]), 5.0f, 0.01f);
+
+    Vec3 v4 = {0x10000, 0, 0};
+    Vec3 vt = mat4_mul_vec3(&M1, v4);
+    EXPECT_NEAR(q16_to_float(vt.x), 11.0f, 0.01f);
 }
 
 void test_ring() {

@@ -13,15 +13,15 @@ namespace FMT {
 static inline int16_t sin_u16(uint16_t a) {
 #ifdef SIN_TABLE_Q15_SIZE
 #if SIN_TABLE_Q15_SIZE == 1024
-    uint16_t idx = a >> 6;
+    uint16_t idx = (a >> 6) & 1023;
 #elif SIN_TABLE_Q15_SIZE == 512
-    uint16_t idx = a >> 7;
+    uint16_t idx = (a >> 7) & 511;
 #elif SIN_TABLE_Q15_SIZE == 256
-    uint16_t idx = a >> 8;
+    uint16_t idx = (a >> 8) & 255;
 #else
     uint16_t idx = ((uint32_t)a * SIN_TABLE_Q15_SIZE) >> 16;
-#endif
     if (idx >= SIN_TABLE_Q15_SIZE) idx = 0;
+#endif
 #else
     uint32_t n = sizeof(sin_table_q15) / 2;
     uint32_t idx = ((uint32_t)a * n) >> 16;
@@ -33,15 +33,15 @@ static inline int16_t sin_u16(uint16_t a) {
 static inline int16_t cos_u16(uint16_t a) {
 #ifdef COS_TABLE_Q15_SIZE
 #if COS_TABLE_Q15_SIZE == 1024
-    uint16_t idx = a >> 6;
+    uint16_t idx = (a >> 6) & 1023;
 #elif COS_TABLE_Q15_SIZE == 512
-    uint16_t idx = a >> 7;
+    uint16_t idx = (a >> 7) & 511;
 #elif COS_TABLE_Q15_SIZE == 256
-    uint16_t idx = a >> 8;
+    uint16_t idx = (a >> 8) & 255;
 #else
     uint16_t idx = ((uint32_t)a * COS_TABLE_Q15_SIZE) >> 16;
-#endif
     if (idx >= COS_TABLE_Q15_SIZE) idx = 0;
+#endif
 #else
     uint32_t n = sizeof(cos_table_q15) / 2;
     uint32_t idx = ((uint32_t)a * n) >> 16;

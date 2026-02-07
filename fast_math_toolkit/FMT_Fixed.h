@@ -11,6 +11,7 @@ enum {
 #define Q16_ONE (1UL << Q16_S)
 
 // Q16.16 Exact
+// We let the compiler handle 64-bit intermediate products as it is highly optimized on AVR.
 static inline uint32_t q16_mul_u(uint32_t a, uint32_t b) { return (uint32_t)(((uint64_t)a * b) >> Q16_S); }
 static inline int32_t  q16_mul_s(int32_t a, int32_t b)  { return (int32_t)(((int64_t)a * b) >> Q16_S); }
 
@@ -23,7 +24,7 @@ static inline int32_t  q16_div_s(int32_t a, int32_t b)  {
     return (int32_t)(((int64_t)a << Q16_S) / b);
 }
 
-// Q16.16 Approximate (faster on some platforms, or for special cases)
+// Q16.16 Approximate (faster for chained operations or special platforms)
 static inline int32_t q16_div_s_ap(int32_t a, int32_t b) {
     bool n = (a < 0) ^ (b < 0);
     uint32_t ua = (a < 0) ? -(uint32_t)a : (uint32_t)a;
@@ -35,7 +36,6 @@ static inline int32_t q16_div_s_ap(int32_t a, int32_t b) {
 
 static inline uint32_t q16_mul_u_ap(uint32_t a, uint32_t b) {
     if (!a || !b) return 0;
-    // log(a*b / 2^16) = log(a) + log(b) - 16*log(2)
     return exp2_q8(log2_q8(a) + log2_q8(b) - (16 << FMT_LOG_Q));
 }
 
@@ -46,17 +46,17 @@ static inline float    q16_to_float(int32_t q)   { return (float)q / 65536.0f; }
 static inline uint32_t q16_inv_sqrt(uint32_t x) {
     if (!x) return 0xFFFFFFFFUL;
     int32_t lx = log2_q8(x);
-    // log2(2^24 / sqrt(x)) = 24 - 0.5*log2(x)
     return exp2_q8((24L << FMT_LOG_Q) - (lx >> 1));
 }
 
 static inline uint32_t q16_sqrt(uint32_t x) {
     if (!x) return 0;
     int32_t lx = log2_q8(x);
-    // lx = log2(x_linear) + 16.0 (in log space)
-    // we want log2(sqrt(x_linear)) + 16.0
-    // = 0.5 * (lx - 16.0) + 16.0 = 0.5*lx - 8.0 + 16.0 = 0.5*lx + 8.0
     return exp2_q8((lx >> 1) + (8L << FMT_LOG_Q));
+}
+
+static inline int32_t q16_lerp(int32_t a, int32_t b, int32_t t) {
+    return a + (int32_t)(((int64_t)(b - a) * t) >> Q16_S);
 }
 
 } // namespace FMT

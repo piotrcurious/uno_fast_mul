@@ -42,8 +42,10 @@ __attribute__((noinline)) FMT::Quat bench_quat_mul_quat(FMT::Quat a, FMT::Quat b
 __attribute__((noinline)) FMT::Vec3 bench_quat_rotate_vec(FMT::Quat q, FMT::Vec3 v) { return FMT::quat_rotate_vec(q, v); }
 __attribute__((noinline)) FMT::Quat bench_quat_normalize(FMT::Quat q) { return FMT::quat_normalize(q); }
 __attribute__((noinline)) int32_t bench_vec3_length(FMT::Vec3 v) { return FMT::vec3_length(v); }
+__attribute__((noinline)) FMT::Log32 bench_log32_add(FMT::Log32 a, FMT::Log32 b) { return FMT::log32_add(a, b); }
 __attribute__((noinline)) int16_t bench_sin(uint16_t a) { return FMT::sin_u16(a); }
 __attribute__((noinline)) FMT::Mat3 bench_rotation(uint16_t x, uint16_t y, uint16_t z) { return FMT::mat3_rotation_euler(x, y, z); }
+__attribute__((noinline)) FMT::Mat4 bench_mat4_mul(const FMT::Mat4* A, const FMT::Mat4* B) { return FMT::mat4_mul(A, B); }
 
 int main(void) {
     UBRR0H = 0;
@@ -130,10 +132,25 @@ int main(void) {
     printf("vec3_length: %u cycles\n", c7l - 4);
 
     start_timer();
+    FMT::Log32 la = FMT::to_log32(100);
+    FMT::Log32 lb = FMT::to_log32(200);
+    FMT::Log32 lsum = bench_log32_add(la, lb);
+    uint16_t c7ls = stop_timer();
+    g_sink = lsum.lval;
+    printf("log32_add: %u cycles\n", c7ls - 4);
+
+    start_timer();
     int16_t s16 = bench_sin(u1);
     uint16_t c8 = stop_timer();
     g_sink = s16;
     printf("sin_u16: %u cycles\n", c8 - 4);
+
+    start_timer();
+    FMT::Mat4 M4 = FMT::mat4_identity();
+    FMT::Mat4 RM4 = bench_mat4_mul(&M4, &M4);
+    uint16_t c10 = stop_timer();
+    g_sink = RM4.m[0][0];
+    printf("mat4_mul: %u cycles\n", c10 - 4);
 
     start_timer();
     FMT::Mat3 RM2 = bench_rotation(0, 16384, 0);
