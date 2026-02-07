@@ -52,6 +52,13 @@ void test_trig() {
     EXPECT_NEAR(sin_u16(0), 0, 10);
     EXPECT_NEAR(sin_u16(16384), 32767, 10); // 90 deg
     EXPECT_NEAR(cos_u16(16384), 0, 10);
+
+    // atan2
+    EXPECT_NEAR(atan2_u16(0, 100), 0, 10);
+    EXPECT_NEAR(atan2_u16(100, 0), 16384, 10); // 90 deg
+    EXPECT_NEAR(atan2_u16(100, 100), 8192, 10); // 45 deg
+    EXPECT_NEAR(atan2_u16(0, -100), 32768, 10); // 180 deg
+    EXPECT_NEAR(atan2_u16(-100, 0), 49152, 10); // 270 deg
 }
 
 void test_3d() {
@@ -88,6 +95,61 @@ void test_3d() {
     Quat q3 = quat_mul_quat(q1, q2); // 180 deg around Y
     Vec3 vr2 = quat_rotate_vec(q3, v1);
     EXPECT_NEAR(q16_to_float(vr2.x), -1.0f, 0.01f);
+
+    Mat4 M1 = mat4_translation(q16_from_float(10.0f), 0, 0);
+    Mat4 M2 = mat4_translation(0, q16_from_float(5.0f), 0);
+    Mat4 M3 = mat4_mul(&M1, &M2);
+    EXPECT_NEAR(q16_to_float(M3.m[0][3]), 10.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(M3.m[1][3]), 5.0f, 0.01f);
+
+    Vec3 v4 = {0x10000, 0, 0};
+    Vec3 vt = mat4_mul_vec3(&M1, v4);
+    EXPECT_NEAR(q16_to_float(vt.x), 11.0f, 0.01f);
+
+    Mat4 Ms = mat4_scaling(q16_from_float(2.0f), q16_from_float(0.5f), q16_from_float(1.0f));
+    Vec3 vs = mat4_mul_vec3(&Ms, v4);
+    EXPECT_NEAR(q16_to_float(vs.x), 2.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(vs.y), 0.0f, 0.01f);
+
+    // Ray-Sphere
+    Vec3 ray_O = {0, 0, 0};
+    Vec3 ray_D = {0, 0, 0x10000};
+    Vec3 sphere_C = {0, 0, 0x50000};
+    int32_t sphere_r = 0x10000;
+    int32_t ray_t;
+    if (ray_sphere_intersect(ray_O, ray_D, sphere_C, sphere_r, &ray_t)) {
+        EXPECT_NEAR(q16_to_float(ray_t), 4.0f, 0.1f);
+    } else {
+        std::cout << "FAIL: ray_sphere_intersect" << std::endl;
+    }
+
+    Mat4 M_rot = mat4_rotation_y(16384); // 90 deg
+    M_rot.m[0][3] = q16_from_float(5.0f);
+    Mat4 M_inv = mat4_inverse_affine_rot(&M_rot);
+    Mat4 M_prod = mat4_mul(&M_rot, &M_inv);
+    EXPECT_NEAR(q16_to_float(M_prod.m[0][0]), 1.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(M_prod.m[1][1]), 1.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(M_prod.m[2][2]), 1.0f, 0.01f);
+    EXPECT_NEAR(q16_to_float(M_prod.m[0][3]), 0.0f, 0.01f);
+
+    Mat4 Mp = mat4_perspective(0x10000); // focal 1.0
+    Vec4 v5 = {0, 0x10000, 0x10000, 0x10000}; // (0,1,1)
+    Vec4 vp5 = mat4_mul_vec4(&Mp, v5);
+    // x = 0, y = 1*1 = 1, z = 1, w = 1*1 + 1*1 = 2
+    // perspective divide y/w = 0.5
+    EXPECT_NEAR(q16_to_float(vp5.y) / q16_to_float(vp5.w), 0.5f, 0.01f);
+
+    // Ray-Plane
+    Vec3 plane_n = {0, 0x10000, 0}; // Y axis
+    int32_t plane_d = -0x50000; // y = 5
+    Vec3 rO = {0, 0, 0};
+    Vec3 rD = {0, 0x10000, 0};
+    int32_t rt;
+    if (ray_plane_intersect(rO, rD, plane_n, plane_d, &rt)) {
+        EXPECT_NEAR(q16_to_float(rt), 5.0f, 0.1f);
+    } else {
+        std::cout << "FAIL: ray_plane_intersect" << std::endl;
+    }
 }
 
 void test_ring() {

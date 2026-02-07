@@ -25,6 +25,10 @@ extern const int16_t PROGMEM sphere_theta_sin_q15[128];
 #define SPHERE_THETA_SIN_Q15_SIZE 128
 extern const int16_t PROGMEM sphere_theta_cos_q15[128];
 #define SPHERE_THETA_COS_Q15_SIZE 128
+extern const int16_t PROGMEM atan_slope_table_q15[1024];
+#define ATAN_SLOPE_TABLE_Q15_SIZE 1024
+extern const uint16_t PROGMEM atan_q15_table[256];
+#define ATAN_Q15_TABLE_SIZE 256
 extern const uint16_t PROGMEM stereo_radial_table_q12[256];
 #define STEREO_RADIAL_TABLE_Q12_SIZE 256
 extern const uint16_t PROGMEM lse_table_q8[256];

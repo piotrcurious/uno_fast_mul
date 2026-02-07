@@ -106,6 +106,18 @@ def gen_atan_table(n=1024, q=15, x_range=4.0):
     scale = qscale(q)
     return [clamp_int(round(math.atan(((i/(n-1))*2.0*x_range)-x_range)*scale), -32768, 32767) for i in range(n)]
 
+def gen_atan_q15_table(n=256):
+    # atan(x) for x in [0, 1], result in Q15 where 2*PI = 65536
+    # so atan(1) = PI/4 = 65536 / 8 = 8192
+    tbl = []
+    for i in range(n):
+        x = i / (n - 1)
+        angle = math.atan(x)
+        # map [0, 2*PI] to [0, 65536]
+        val = (angle / (2 * math.pi)) * 65536
+        tbl.append(round(val))
+    return tbl
+
 def gen_stereographic_table(n=256, q=12):
     scale = qscale(q)
     return [round((2.0 / (1.0 + ((i/(n-1))*2.0)**2)) * scale) for i in range(n)]
@@ -206,6 +218,7 @@ def main():
 
     if args.gen_atan:
         arrays.append(("int16_t", f"atan_slope_table_q{args.atan_q}", gen_atan_table(args.atan_size, q=args.atan_q, x_range=args.atan_range)))
+        arrays.append(("uint16_t", "atan_q15_table", gen_atan_q15_table(256)))
     if args.gen_stereo:
         stereo = gen_stereographic_table(args.stereo_size, q=args.stereo_q)
         arrays.append(("uint16_t" if max(stereo) <= 0xFFFF else "uint32_t", f"stereo_radial_table_q{args.stereo_q}", stereo))

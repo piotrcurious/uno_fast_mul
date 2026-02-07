@@ -18,6 +18,14 @@ typedef struct {
     int32_t w, x, y, z;
 } Quat;
 
+typedef struct {
+    int32_t m[4][4];
+} Mat4;
+
+typedef struct {
+    int32_t x, y, z, w;
+} Vec4;
+
 static inline Vec3 vec3_init(int32_t x, int32_t y, int32_t z) {
     Vec3 v = {x, y, z};
     return v;
@@ -61,20 +69,22 @@ static inline int32_t vec3_dist(Vec3 a, Vec3 b) {
 }
 
 static inline Vec3 mat3_mul_vec(const Mat3 *M, Vec3 v) {
+    int32_t x = v.x, y = v.y, z = v.z;
     Vec3 r;
-    r.x = (int32_t)(((int64_t)M->m[0][0] * v.x + (int64_t)M->m[0][1] * v.y + (int64_t)M->m[0][2] * v.z) >> Q16_S);
-    r.y = (int32_t)(((int64_t)M->m[1][0] * v.x + (int64_t)M->m[1][1] * v.y + (int64_t)M->m[1][2] * v.z) >> Q16_S);
-    r.z = (int32_t)(((int64_t)M->m[2][0] * v.x + (int64_t)M->m[2][1] * v.y + (int64_t)M->m[2][2] * v.z) >> Q16_S);
+    r.x = (int32_t)(((int64_t)M->m[0][0] * x + (int64_t)M->m[0][1] * y + (int64_t)M->m[0][2] * z) >> Q16_S);
+    r.y = (int32_t)(((int64_t)M->m[1][0] * x + (int64_t)M->m[1][1] * y + (int64_t)M->m[1][2] * z) >> Q16_S);
+    r.z = (int32_t)(((int64_t)M->m[2][0] * x + (int64_t)M->m[2][1] * y + (int64_t)M->m[2][2] * z) >> Q16_S);
     return r;
 }
 
 static inline Mat3 mat3_mul_mat(const Mat3 *A, const Mat3 *B) {
     Mat3 R;
     for (int i = 0; i < 3; ++i) {
+        int32_t a0 = A->m[i][0], a1 = A->m[i][1], a2 = A->m[i][2];
         for (int j = 0; j < 3; ++j) {
-            R.m[i][j] = (int32_t)(((int64_t)A->m[i][0] * B->m[0][j] +
-                                   (int64_t)A->m[i][1] * B->m[1][j] +
-                                   (int64_t)A->m[i][2] * B->m[2][j]) >> Q16_S);
+            R.m[i][j] = (int32_t)(((int64_t)a0 * B->m[0][j] +
+                                   (int64_t)a1 * B->m[1][j] +
+                                   (int64_t)a2 * B->m[2][j]) >> Q16_S);
         }
     }
     return R;
@@ -125,6 +135,129 @@ static inline Vec3 project_perspective_ap(Vec3 v, int32_t focal) {
     return r;
 }
 
+static inline Mat4 mat4_identity() {
+    Mat4 r;
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            r.m[i][j] = (i == j) ? Q16_ONE : 0;
+        }
+    }
+    return r;
+}
+
+static inline Mat4 mat4_mul(const Mat4 *A, const Mat4 *B) {
+    Mat4 R;
+    for (int i = 0; i < 4; i++) {
+        int32_t a0 = A->m[i][0], a1 = A->m[i][1], a2 = A->m[i][2], a3 = A->m[i][3];
+        R.m[i][0] = (int32_t)(((int64_t)a0 * B->m[0][0] + (int64_t)a1 * B->m[1][0] + (int64_t)a2 * B->m[2][0] + (int64_t)a3 * B->m[3][0]) >> Q16_S);
+        R.m[i][1] = (int32_t)(((int64_t)a0 * B->m[0][1] + (int64_t)a1 * B->m[1][1] + (int64_t)a2 * B->m[2][1] + (int64_t)a3 * B->m[3][1]) >> Q16_S);
+        R.m[i][2] = (int32_t)(((int64_t)a0 * B->m[0][2] + (int64_t)a1 * B->m[1][2] + (int64_t)a2 * B->m[2][2] + (int64_t)a3 * B->m[3][2]) >> Q16_S);
+        R.m[i][3] = (int32_t)(((int64_t)a0 * B->m[0][3] + (int64_t)a1 * B->m[1][3] + (int64_t)a2 * B->m[2][3] + (int64_t)a3 * B->m[3][3]) >> Q16_S);
+    }
+    return R;
+}
+
+static inline Mat4 mat4_mul_affine(const Mat4 *A, const Mat4 *B) {
+    Mat4 R;
+    // Assume A and B are affine (last row [0 0 0 1])
+    for (int i = 0; i < 3; i++) {
+        int32_t a0 = A->m[i][0], a1 = A->m[i][1], a2 = A->m[i][2], a3 = A->m[i][3];
+        R.m[i][0] = (int32_t)(((int64_t)a0 * B->m[0][0] + (int64_t)a1 * B->m[1][0] + (int64_t)a2 * B->m[2][0]) >> Q16_S);
+        R.m[i][1] = (int32_t)(((int64_t)a0 * B->m[0][1] + (int64_t)a1 * B->m[1][1] + (int64_t)a2 * B->m[2][1]) >> Q16_S);
+        R.m[i][2] = (int32_t)(((int64_t)a0 * B->m[0][2] + (int64_t)a1 * B->m[1][2] + (int64_t)a2 * B->m[2][2]) >> Q16_S);
+        R.m[i][3] = (int32_t)(((int64_t)a0 * B->m[0][3] + (int64_t)a1 * B->m[1][3] + (int64_t)a2 * B->m[2][3]) >> Q16_S) + a3;
+    }
+    R.m[3][0] = 0; R.m[3][1] = 0; R.m[3][2] = 0; R.m[3][3] = Q16_ONE;
+    return R;
+}
+
+static inline Vec4 mat4_mul_vec4(const Mat4 *M, Vec4 v) {
+    int32_t x = v.x, y = v.y, z = v.z, w = v.w;
+    Vec4 r;
+    r.x = (int32_t)(((int64_t)M->m[0][0] * x + (int64_t)M->m[0][1] * y + (int64_t)M->m[0][2] * z + (int64_t)M->m[0][3] * w) >> Q16_S);
+    r.y = (int32_t)(((int64_t)M->m[1][0] * x + (int64_t)M->m[1][1] * y + (int64_t)M->m[1][2] * z + (int64_t)M->m[1][3] * w) >> Q16_S);
+    r.z = (int32_t)(((int64_t)M->m[2][0] * x + (int64_t)M->m[2][1] * y + (int64_t)M->m[2][2] * z + (int64_t)M->m[2][3] * w) >> Q16_S);
+    r.w = (int32_t)(((int64_t)M->m[3][0] * x + (int64_t)M->m[3][1] * y + (int64_t)M->m[3][2] * z + (int64_t)M->m[3][3] * w) >> Q16_S);
+    return r;
+}
+
+static inline Mat4 mat4_translation(int32_t x, int32_t y, int32_t z) {
+    Mat4 r = mat4_identity();
+    r.m[0][3] = x;
+    r.m[1][3] = y;
+    r.m[2][3] = z;
+    return r;
+}
+
+static inline Mat4 mat4_scaling(int32_t x, int32_t y, int32_t z) {
+    Mat4 r = mat4_identity();
+    r.m[0][0] = x;
+    r.m[1][1] = y;
+    r.m[2][2] = z;
+    return r;
+}
+
+static inline Mat4 mat4_inverse_affine_rot(const Mat4 *M) {
+    Mat4 R;
+    // Transpose the 3x3 rotation part
+    R.m[0][0] = M->m[0][0]; R.m[0][1] = M->m[1][0]; R.m[0][2] = M->m[2][0];
+    R.m[1][0] = M->m[0][1]; R.m[1][1] = M->m[1][1]; R.m[1][2] = M->m[2][1];
+    R.m[2][0] = M->m[0][2]; R.m[2][1] = M->m[1][2]; R.m[2][2] = M->m[2][2];
+
+    // New translation = - R^T * t
+    int32_t tx = M->m[0][3], ty = M->m[1][3], tz = M->m[2][3];
+    R.m[0][3] = - (int32_t)(((int64_t)R.m[0][0] * tx + (int64_t)R.m[0][1] * ty + (int64_t)R.m[0][2] * tz) >> Q16_S);
+    R.m[1][3] = - (int32_t)(((int64_t)R.m[1][0] * tx + (int64_t)R.m[1][1] * ty + (int64_t)R.m[1][2] * tz) >> Q16_S);
+    R.m[2][3] = - (int32_t)(((int64_t)R.m[2][0] * tx + (int64_t)R.m[2][1] * ty + (int64_t)R.m[2][2] * tz) >> Q16_S);
+
+    R.m[3][0] = 0; R.m[3][1] = 0; R.m[3][2] = 0; R.m[3][3] = Q16_ONE;
+    return R;
+}
+
+static inline Mat4 mat4_perspective(int32_t focal) {
+    Mat4 r;
+    for(int i=0; i<4; i++) for(int j=0; j<4; j++) r.m[i][j] = 0;
+    r.m[0][0] = focal;
+    r.m[1][1] = focal;
+    r.m[2][2] = Q16_ONE;
+    r.m[2][3] = 0;
+    r.m[3][2] = Q16_ONE;
+    r.m[3][3] = focal;
+    return r;
+}
+
+static inline Vec3 mat4_mul_vec3(const Mat4 *M, Vec3 v) {
+    Vec3 r;
+    r.x = (int32_t)(((int64_t)M->m[0][0] * v.x + (int64_t)M->m[0][1] * v.y + (int64_t)M->m[0][2] * v.z) >> Q16_S) + M->m[0][3];
+    r.y = (int32_t)(((int64_t)M->m[1][0] * v.x + (int64_t)M->m[1][1] * v.y + (int64_t)M->m[1][2] * v.z) >> Q16_S) + M->m[1][3];
+    r.z = (int32_t)(((int64_t)M->m[2][0] * v.x + (int64_t)M->m[2][1] * v.y + (int64_t)M->m[2][2] * v.z) >> Q16_S) + M->m[2][3];
+    return r;
+}
+
+static inline Mat4 mat4_rotation_x(uint16_t angle) {
+    int32_t s = sin_q16(angle), c = cos_q16(angle);
+    Mat4 r = mat4_identity();
+    r.m[1][1] = c; r.m[1][2] = -s;
+    r.m[2][1] = s; r.m[2][2] = c;
+    return r;
+}
+
+static inline Mat4 mat4_rotation_y(uint16_t angle) {
+    int32_t s = sin_q16(angle), c = cos_q16(angle);
+    Mat4 r = mat4_identity();
+    r.m[0][0] = c;  r.m[0][2] = s;
+    r.m[2][0] = -s; r.m[2][2] = c;
+    return r;
+}
+
+static inline Mat4 mat4_rotation_z(uint16_t angle) {
+    int32_t s = sin_q16(angle), c = cos_q16(angle);
+    Mat4 r = mat4_identity();
+    r.m[0][0] = c; r.m[0][1] = -s;
+    r.m[1][0] = s; r.m[1][1] = c;
+    return r;
+}
+
 static inline Quat quat_from_axis_angle(int32_t ax, int32_t ay, int32_t az, uint16_t angle) {
     int32_t s = sin_q16(angle >> 1);
     int32_t c = cos_q16(angle >> 1);
@@ -136,11 +269,13 @@ static inline Quat quat_from_axis_angle(int32_t ax, int32_t ay, int32_t az, uint
 }
 
 static inline Quat quat_mul_quat(Quat a, Quat b) {
+    int32_t aw = a.w, ax = a.x, ay = a.y, az = a.z;
+    int32_t bw = b.w, bx = b.x, by = b.y, bz = b.z;
     Quat r;
-    r.w = (int32_t)(((int64_t)a.w * b.w - (int64_t)a.x * b.x - (int64_t)a.y * b.y - (int64_t)a.z * b.z) >> Q16_S);
-    r.x = (int32_t)(((int64_t)a.w * b.x + (int64_t)a.x * b.w + (int64_t)a.y * b.z - (int64_t)a.z * b.y) >> Q16_S);
-    r.y = (int32_t)(((int64_t)a.w * b.y - (int64_t)a.x * b.z + (int64_t)a.y * b.w + (int64_t)a.z * b.x) >> Q16_S);
-    r.z = (int32_t)(((int64_t)a.w * b.z + (int64_t)a.x * b.y - (int64_t)a.y * b.x + (int64_t)a.z * b.w) >> Q16_S);
+    r.w = (int32_t)(((int64_t)aw * bw - (int64_t)ax * bx - (int64_t)ay * by - (int64_t)az * bz) >> Q16_S);
+    r.x = (int32_t)(((int64_t)aw * bx + (int64_t)ax * bw + (int64_t)ay * bz - (int64_t)az * by) >> Q16_S);
+    r.y = (int32_t)(((int64_t)aw * by - (int64_t)ax * bz + (int64_t)ay * bw + (int64_t)az * bx) >> Q16_S);
+    r.z = (int32_t)(((int64_t)aw * bz + (int64_t)ax * by - (int64_t)ay * bx + (int64_t)az * bw) >> Q16_S);
     return r;
 }
 
@@ -154,6 +289,15 @@ static inline Quat quat_normalize(Quat q) {
     r.y = q16_mul_s(q.y, isqr);
     r.z = q16_mul_s(q.z, isqr);
     return r;
+}
+
+static inline Quat quat_nlerp(Quat a, Quat b, int32_t t) {
+    Quat r;
+    r.w = q16_lerp(a.w, b.w, t);
+    r.x = q16_lerp(a.x, b.x, t);
+    r.y = q16_lerp(a.y, b.y, t);
+    r.z = q16_lerp(a.z, b.z, t);
+    return quat_normalize(r);
 }
 
 static inline Vec3 quat_rotate_vec(Quat q, Vec3 v) {
@@ -180,6 +324,42 @@ static inline Vec3 pipeline_mvp(Vec3 v_local, int32_t scale,
     world.y += trans.y;
     world.z += trans.z;
     return project_perspective(world, focal);
+}
+
+static inline bool ray_sphere_intersect(Vec3 O, Vec3 D, Vec3 C, int32_t r, int32_t *t_out) {
+    Vec3 L = vec3_sub(O, C);
+    int32_t b = vec3_dot(D, L); // Actually D.L
+    int32_t c = vec3_dot(L, L) - q16_mul_s(r, r);
+
+    // Discriminant / 4 = b^2 - c
+    int32_t discr = q16_mul_s(b, b) - c;
+    if (discr < 0) return false;
+
+    int32_t s = (int32_t)q16_sqrt((uint32_t)discr);
+    int32_t t0 = -b - s;
+    int32_t t1 = -b + s;
+
+    if (t0 >= 0) {
+        if (t_out) *t_out = t0;
+        return true;
+    }
+    if (t1 >= 0) {
+        if (t_out) *t_out = t1;
+        return true;
+    }
+    return false;
+}
+
+static inline bool ray_plane_intersect(Vec3 O, Vec3 D, Vec3 n, int32_t d, int32_t *t_out) {
+    int32_t denom = vec3_dot(n, D);
+    if (denom == 0) return false;
+
+    int32_t t = - (vec3_dot(n, O) + d);
+    t = q16_div_s(t, denom);
+
+    if (t < 0) return false;
+    if (t_out) *t_out = t;
+    return true;
 }
 
 static inline Vec3 pipeline_mvp_fused(Vec3 v_local, int32_t scale,

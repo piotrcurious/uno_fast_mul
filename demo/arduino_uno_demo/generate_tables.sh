@@ -7,4 +7,4 @@ if [ ! -f "$PYTHON_SCRIPT" ]; then
     exit 1
 fi
 
-python3 "$PYTHON_SCRIPT" --out arduino_tables --emit-c
+python3 "$PYTHON_SCRIPT" --out arduino_tables --emit-c --gen-lse --gen-atan --gen-stereo --gen-float

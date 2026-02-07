@@ -39,26 +39,20 @@ static inline int32_t log2_q8(uint32_t v) {
     int e;
     uint8_t m;
     if (v & 0xFF000000UL) {
-        uint8_t t = (uint8_t)(v >> 24);
-        e = 24 + FMT_READ8(msb_table, t);
-        uint16_t w = (uint16_t)(v >> 16);
-        int s = e - 23; // shift amount for the 16-bit word to get top 8 bits
-        m = (uint8_t)(w >> s);
+        e = 24 + FMT_READ8(msb_table, (uint8_t)(v >> 24));
+        uint8_t s = e - 23;
+        m = (uint8_t)((uint16_t)(v >> 16) >> s);
     } else if (v & 0x00FF0000UL) {
-        uint8_t t = (uint8_t)(v >> 16);
-        e = 16 + FMT_READ8(msb_table, t);
-        uint16_t w = (uint16_t)(v >> 8);
-        int s = e - 15;
-        m = (uint8_t)(w >> s);
+        e = 16 + FMT_READ8(msb_table, (uint8_t)(v >> 16));
+        uint8_t s = e - 15;
+        m = (uint8_t)((uint16_t)(v >> 8) >> s);
     } else if (v & 0x0000FF00UL) {
-        uint8_t t = (uint8_t)(v >> 8);
-        e = 8 + FMT_READ8(msb_table, t);
-        int s = e - 7;
-        m = (uint8_t)(v >> s);
+        e = 8 + FMT_READ8(msb_table, (uint8_t)(v >> 8));
+        uint8_t s = e - 7;
+        m = (uint8_t)((uint16_t)v >> s);
     } else {
         e = FMT_READ8(msb_table, (uint8_t)v);
-        int s = 7 - e;
-        m = (uint8_t)(v << s);
+        m = (uint8_t)v << (7 - e);
     }
     return ((int32_t)(e - 7) << FMT_LOG_Q) + FMT_READ16(log2_table_q8, m);
 }
@@ -66,15 +60,24 @@ static inline int32_t log2_q8(uint32_t v) {
 static inline uint32_t exp2_q8(int32_t y) {
     if (y == (-2147483647L - 1L)) return 0;
     int32_t ip = y >> FMT_LOG_Q;
-    uint16_t fr = (uint16_t)(y & ((1 << FMT_LOG_Q) - 1));
-    uint32_t v = FMT_READ16(exp2_table_q8, fr); // Q8 scaled
-    if (ip >= 0) {
-        if (ip > 31) return 0xFFFFFFFFUL;
-        if (ip >= FMT_LOG_Q) return v << (ip - FMT_LOG_Q);
-        return v >> (FMT_LOG_Q - ip);
+    uint16_t fr = (uint16_t)(y & 0xFF);
+    uint32_t v = FMT_READ16(exp2_table_q8, fr);
+    if (ip < 0) {
+        uint8_t s = 8 - ip;
+        if (s >= 24) return 0;
+        if (s >= 16) return (v >> 16) >> (s - 16);
+        if (s >= 8)  return (v >> 8) >> (s - 8);
+        return v >> s;
+    }
+    if (ip > 31) return 0xFFFFFFFFUL;
+    uint8_t s;
+    if (ip >= 8) {
+        s = ip - 8;
+        if (s >= 16) return (v << 16) << (s - 16);
+        if (s >= 8)  return (v << 8) << (s - 8);
+        return v << s;
     } else {
-        int s = FMT_LOG_Q - ip;
-        if (s >= 31) return 0;
+        s = 8 - ip;
         return v >> s;
     }
 }
