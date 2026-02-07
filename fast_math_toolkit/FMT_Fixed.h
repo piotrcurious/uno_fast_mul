@@ -8,7 +8,7 @@ namespace FMT {
 enum {
     Q16_S = 16
 };
-#define Q16_ONE (1UL << Q16_S)
+#define Q16_ONE (1L << Q16_S)
 
 // Q16.16 Exact
 // We let the compiler handle 64-bit intermediate products as it is highly optimized on AVR.

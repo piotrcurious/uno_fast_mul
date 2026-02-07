@@ -53,12 +53,20 @@ void test_trig() {
     EXPECT_NEAR(sin_u16(16384), 32767, 10); // 90 deg
     EXPECT_NEAR(cos_u16(16384), 0, 10);
 
+    Log32 ls = sin_log(16384);
+    EXPECT_NEAR(from_log32(ls), 65535, 10); // sin(90)=1.0 in Q16.16
+
     // atan2
     EXPECT_NEAR(atan2_u16(0, 100), 0, 10);
     EXPECT_NEAR(atan2_u16(100, 0), 16384, 10); // 90 deg
     EXPECT_NEAR(atan2_u16(100, 100), 8192, 10); // 45 deg
     EXPECT_NEAR(atan2_u16(0, -100), 32768, 10); // 180 deg
     EXPECT_NEAR(atan2_u16(-100, 0), 49152, 10); // 270 deg
+
+    // acos
+    EXPECT_NEAR(acos_u16(Q16_ONE), 0, 10);
+    EXPECT_NEAR(acos_u16(0), 16384, 10); // 90 deg
+    EXPECT_NEAR(acos_u16(-Q16_ONE), 32768, 10); // 180 deg
 }
 
 void test_3d() {

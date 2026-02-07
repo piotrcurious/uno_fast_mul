@@ -86,6 +86,24 @@ def gen_sin_cos_table(n=512, q=15):
     cos_tbl = [clamp_int(round(math.cos(2.0*math.pi*i/n)*scale), -32768, 32767) for i in range(n)]
     return sin_tbl, cos_tbl
 
+def gen_log_sin_cos_table(n=512, q=8):
+    # stores log2(|sin(x)| * 2^15) in Q8.8?
+    # Better: stores log2(|sin(x)|) + 16.0 such that exp2 gives Q16.16
+    # sin(x) range [0, 1]. log2(sin(x)) range [-inf, 0].
+    # log2(sin(x)) + 16 range [-inf, 16].
+    scale = qscale(q)
+    lsin = []
+    lcos = []
+    for i in range(n):
+        s = abs(math.sin(2.0*math.pi*i/n))
+        if s < 1e-9: lsin.append(-32768)
+        else: lsin.append(round((math.log2(s) + 16.0) * scale))
+
+        c = abs(math.cos(2.0*math.pi*i/n))
+        if c < 1e-9: lcos.append(-32768)
+        else: lcos.append(round((math.log2(c) + 16.0) * scale))
+    return lsin, lcos
+
 def gen_perspective_table(n=256, q=8, focal=256.0, zmin=0.0, zmax=1024.0):
     scale = qscale(q)
     tbl = []
@@ -114,6 +132,16 @@ def gen_atan_q15_table(n=256):
         x = i / (n - 1)
         angle = math.atan(x)
         # map [0, 2*PI] to [0, 65536]
+        val = (angle / (2 * math.pi)) * 65536
+        tbl.append(round(val))
+    return tbl
+
+def gen_acos_table(n=256):
+    # acos(x) for x in [0, 1], result in Q15
+    tbl = []
+    for i in range(n):
+        x = i / (n - 1)
+        angle = math.acos(x)
         val = (angle / (2 * math.pi)) * 65536
         tbl.append(round(val))
     return tbl
@@ -191,6 +219,7 @@ def main():
     parser.add_argument("--glyph-w", type=int, default=None)
     parser.add_argument("--glyph-h", type=int, default=None)
     parser.add_argument("--gen-lse", action="store_true", help="Generate LogSumExp table")
+    parser.add_argument("--gen-log-trig", action="store_true", help="Generate Log-domain sin/cos tables")
     args = parser.parse_args()
 
     base = Path(args.out)
@@ -208,6 +237,11 @@ def main():
     arrays.append(("int16_t", f"sin_table_q{args.sin_cos_q}", sin_tbl))
     arrays.append(("int16_t", f"cos_table_q{args.sin_cos_q}", cos_tbl))
 
+    if args.gen_log_trig:
+        lsin, lcos = gen_log_sin_cos_table(args.sin_cos_size, q=args.log_q)
+        arrays.append(("int16_t", f"log_sin_table_q{args.log_q}", lsin))
+        arrays.append(("int16_t", f"log_cos_table_q{args.log_q}", lcos))
+
     persp = gen_perspective_table(args.persp_size, q=args.persp_q, focal=args.persp_focal, zmin=args.persp_zmin, zmax=args.persp_zmax)
     persp_type = "uint16_t" if max(persp) <= 0xFFFF else "uint32_t"
     arrays.append((persp_type, f"perspective_scale_table_q{args.persp_q}", persp))
@@ -219,6 +253,7 @@ def main():
     if args.gen_atan:
         arrays.append(("int16_t", f"atan_slope_table_q{args.atan_q}", gen_atan_table(args.atan_size, q=args.atan_q, x_range=args.atan_range)))
         arrays.append(("uint16_t", "atan_q15_table", gen_atan_q15_table(256)))
+        arrays.append(("uint16_t", "acos_table", gen_acos_table(256)))
     if args.gen_stereo:
         stereo = gen_stereographic_table(args.stereo_size, q=args.stereo_q)
         arrays.append(("uint16_t" if max(stereo) <= 0xFFFF else "uint32_t", f"stereo_radial_table_q{args.stereo_q}", stereo))

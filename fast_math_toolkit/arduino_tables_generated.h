@@ -15,20 +15,26 @@ extern const uint16_t PROGMEM log2_table_q8[256];
 #define LOG2_TABLE_Q8_SIZE 256
 extern const uint16_t PROGMEM exp2_table_q8[256];
 #define EXP2_TABLE_Q8_SIZE 256
-extern const int16_t PROGMEM sin_table_q15[1024];
-#define SIN_TABLE_Q15_SIZE 1024
-extern const int16_t PROGMEM cos_table_q15[1024];
-#define COS_TABLE_Q15_SIZE 1024
+extern const int16_t PROGMEM sin_table_q15[256];
+#define SIN_TABLE_Q15_SIZE 256
+extern const int16_t PROGMEM cos_table_q15[256];
+#define COS_TABLE_Q15_SIZE 256
+extern const int16_t PROGMEM log_sin_table_q8[256];
+#define LOG_SIN_TABLE_Q8_SIZE 256
+extern const int16_t PROGMEM log_cos_table_q8[256];
+#define LOG_COS_TABLE_Q8_SIZE 256
 extern const uint16_t PROGMEM perspective_scale_table_q8[256];
 #define PERSPECTIVE_SCALE_TABLE_Q8_SIZE 256
 extern const int16_t PROGMEM sphere_theta_sin_q15[128];
 #define SPHERE_THETA_SIN_Q15_SIZE 128
 extern const int16_t PROGMEM sphere_theta_cos_q15[128];
 #define SPHERE_THETA_COS_Q15_SIZE 128
-extern const int16_t PROGMEM atan_slope_table_q15[1024];
-#define ATAN_SLOPE_TABLE_Q15_SIZE 1024
+extern const int16_t PROGMEM atan_slope_table_q15[512];
+#define ATAN_SLOPE_TABLE_Q15_SIZE 512
 extern const uint16_t PROGMEM atan_q15_table[256];
 #define ATAN_Q15_TABLE_SIZE 256
+extern const uint16_t PROGMEM acos_table[256];
+#define ACOS_TABLE_SIZE 256
 extern const uint16_t PROGMEM stereo_radial_table_q12[256];
 #define STEREO_RADIAL_TABLE_Q12_SIZE 256
 extern const uint16_t PROGMEM lse_table_q8[256];
