@@ -291,6 +291,29 @@ void drawString(TileManager &tiles, const char* str, int16_t x, int16_t y,
     }
 }
 
+// Debug path rendering
+void drawDebugPath(TileManager &tiles, float camX, float camY, float camZoom) {
+    for (int i=0; i<NUM_MASTER_SEGMENTS; ++i) {
+        Segment s;
+        memcpy_P(&s, &MASTER_PATH[i], sizeof(Segment));
+
+        // Transform coordinates
+        int16_t x1 = (int16_t)((s.x1 - camX) * camZoom) + tft.width() / 2;
+        int16_t y1 = (int16_t)((s.y1 - camY) * camZoom) + tft.height() / 2;
+        int16_t x2 = (int16_t)((s.x2 - camX) * camZoom) + tft.width() / 2;
+        int16_t y2 = (int16_t)((s.y2 - camY) * camZoom) + tft.height() / 2;
+
+        // Simple line drawing into tiles (just points for now for speed/simplicity)
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float len = sqrt(dx*dx + dy*dy);
+        if (len < 1) continue;
+        for (float t=0; t<=1.0f; t += 1.0f/len) {
+            tiles.writePixelGlobal(x1 + dx*t, y1 + dy*t, 0x03E0); // Dim green
+        }
+    }
+}
+
 void renderFlyby(uint8_t verseIdx, float progress) {
     PathPoint current = getVersePos(verseIdx);
     PathPoint next = getVersePos((verseIdx + 1) % NUM_SAMPLES);
@@ -300,14 +323,14 @@ void renderFlyby(uint8_t verseIdx, float progress) {
     cameraY = current.y + (next.y - current.y) * progress;
     cameraZoom = 2.0f;
 
-    // Center on the fractal text area (approx 160, 0 based on our path generation)
-    // Actually Hershey paths are centered around Y=0.
+    // Draw master path in debug mode
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
     
     // Render current verse with fade
     float alpha = progress < 0.2f ? progress * 5.0f : (progress > 0.8f ? (1.0f - progress) * 5.0f : 1.0f);
-    
+
     if (alpha > 0.01f) {
-        drawString(gTiles, verses[verseIdx], current.x, current.y, 0.5f,
+        drawString(gTiles, verses[verseIdx], current.x, current.y, current.scale,
                   current.angle, getVerseColor(verseIdx), cameraX, cameraY, cameraZoom);
     }
 }
@@ -320,9 +343,12 @@ void renderZoomOut(float progress) {
     cameraX = 180 * (1.0f - progress); // Moving to center
     cameraY = 0;
     
+    // Draw master path in debug mode
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
+
     for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
         PathPoint p = getVersePos(i);
-        drawString(gTiles, verses[i], p.x, p.y, 0.3f,
+        drawString(gTiles, verses[i], p.x, p.y, p.scale * 0.6f,
                   p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
     }
 }
@@ -332,9 +358,12 @@ void renderFinal() {
     cameraY = 0;
     cameraZoom = 0.4f;
     
+    // Draw master path in debug mode
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
+
     for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
         PathPoint p = getVersePos(i);
-        drawString(gTiles, verses[i], p.x, p.y, 0.3f,
+        drawString(gTiles, verses[i], p.x, p.y, p.scale * 0.6f,
                   p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
     }
     

@@ -23,7 +23,7 @@ const uint16_t exp2_table_q8[256] PROGMEM = {
 #define GLYPH_WIDTH 16
 #define GLYPH_HEIGHT 24
 #define GLYPH_COUNT 58
-const char GLYPH_CHAR_LIST[59] PROGMEM = " !"',.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const char GLYPH_CHAR_LIST[59] PROGMEM = " !\"\',.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 const uint32_t GLYPH_BITMAPS[928] PROGMEM = {
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // ' '

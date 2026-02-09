@@ -8,6 +8,7 @@ def generate():
     fonts.load_default_font('futural')
 
     chars = " !\"',.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    escaped_chars = chars.replace('"', '\\"').replace("'", "\\'")
     glyph_w = 16
     glyph_h = 24 # Hershey needs a bit more height
 
@@ -80,7 +81,7 @@ def generate():
         f.write(f"#define GLYPH_WIDTH {glyph_w}\n")
         f.write(f"#define GLYPH_HEIGHT {glyph_h}\n")
         f.write(f"#define GLYPH_COUNT {len(chars)}\n")
-        f.write(f'const char GLYPH_CHAR_LIST[{len(chars)+1}] PROGMEM = "{chars}";\n\n')
+        f.write(f'const char GLYPH_CHAR_LIST[{len(chars)+1}] PROGMEM = "{escaped_chars}";\n\n')
 
         glyph_type = "uint32_t" if glyph_h > 16 else "uint16_t"
         f.write(f"const {glyph_type} GLYPH_BITMAPS[{len(chars) * glyph_w}] PROGMEM = {{\n")
