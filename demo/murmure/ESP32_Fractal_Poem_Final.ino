@@ -7,6 +7,7 @@
 
 // include generated tables & glyphs
 #include "arduino_tables.h"
+#include "glyph_paths.h"
 
 // ---------------------- Config ----------------------
 #define LOG_Q 8
@@ -242,44 +243,17 @@ const char* verses[28] = {
     "Le fractal est immense."
 };
 
-// Pre-calculated positions where verses form "Le fractal est immense"
-struct VerseLayout {
-    int16_t x, y;
-    float angle;
-    float scale;
-    uint16_t color;
-};
+// Helper to get verse position from PROGMEM
+static inline PathPoint getVersePos(uint8_t idx) {
+    PathPoint p;
+    memcpy_P(&p, &VERSE_POSITIONS[idx], sizeof(PathPoint));
+    return p;
+}
 
-const VerseLayout FINAL_LAYOUT[28] = {
-    {  40, 100,  1.571f, 0.6f, 0x3BFF},  // L
-    {  68, 100,  0.000f, 0.6f, 0xF81F},  // e
-    {  96, 100,  0.000f, 0.6f, 0x07FF},  
-    { 124, 100,  1.571f, 0.6f, 0xFD20},  // f
-    { 152, 100,  1.571f, 0.6f, 0x07E0},  // r
-    { 176, 100,  0.000f, 0.6f, 0xFFE0},  // a
-    { 200, 100,  0.000f, 0.6f, 0x3BFF},  // c
-    { 228, 100,  1.571f, 0.6f, 0xF81F},  // t
-    { 252, 100,  0.000f, 0.6f, 0x07FF},  // a
-    { 276, 100,  1.571f, 0.6f, 0xFD20},  // l
-    {  40, 140,  0.000f, 0.6f, 0x07E0},  // e
-    {  68, 140,  0.000f, 0.6f, 0xFFE0},  // s
-    {  96, 140,  1.571f, 0.6f, 0x3BFF},  // t
-    { 124, 140,  0.000f, 0.6f, 0xF81F},  
-    { 152, 140,  1.571f, 0.6f, 0x07FF},  // i
-    { 176, 140,  1.571f, 0.6f, 0xFD20},  // m
-    { 200, 140,  1.571f, 0.6f, 0x07E0},  // m
-    { 224, 140,  0.000f, 0.6f, 0xFFE0},  // e
-    { 248, 140,  1.571f, 0.6f, 0x3BFF},  // n
-    { 272, 140,  0.000f, 0.6f, 0xF81F},  // s
-    {  40, 180,  0.000f, 0.6f, 0x07FF},  // e
-    {  68, 180,  0.000f, 0.6f, 0xFD20},  // (outro verses)
-    {  96, 180,  1.571f, 0.6f, 0x07E0},
-    { 124, 180,  0.000f, 0.6f, 0xFFE0},
-    { 152, 180,  1.571f, 0.6f, 0x3BFF},
-    { 176, 180,  0.000f, 0.6f, 0xF81F},
-    { 200, 180,  1.571f, 0.6f, 0x07FF},
-    { 224, 180,  0.000f, 0.6f, 0xFD20}
-};
+uint16_t getVerseColor(uint8_t idx) {
+    static const uint16_t colors[] = {0x3BFF, 0xF81F, 0x07FF, 0xFD20, 0x07E0, 0xFFE0};
+    return colors[idx % 6];
+}
 
 // -------------------- Scene State --------------------
 
@@ -307,7 +281,7 @@ void drawString(TileManager &tiles, const char* str, int16_t x, int16_t y,
                 float scale, float angle, uint16_t color, float camX, float camY, float camZoom) {
     int len = strlen(str);
     for (int i = 0; i < len; i++) {
-        int16_t cx = x + i * (int)(10 * scale);
+        int16_t cx = x + i * (int)(GLYPH_WIDTH * 0.8f * scale);
         
         // Apply camera transform
         int16_t screenX = (int16_t)((cx - camX) * camZoom) + tft.width() / 2;
@@ -318,90 +292,50 @@ void drawString(TileManager &tiles, const char* str, int16_t x, int16_t y,
 }
 
 void renderFlyby(uint8_t verseIdx, float progress) {
-    // Smooth camera movement to current verse
-    const VerseLayout &layout = FINAL_LAYOUT[verseIdx];
+    PathPoint current = getVersePos(verseIdx);
+    PathPoint next = getVersePos((verseIdx + 1) % NUM_SAMPLES);
     
-    // Ease in/out
-    float eased = progress < 0.5f ? 2 * progress * progress : 1 - pow(-2 * progress + 2, 2) / 2;
+    // Interpolate camera position along the path between verses
+    cameraX = current.x + (next.x - current.x) * progress;
+    cameraY = current.y + (next.y - current.y) * progress;
+    cameraZoom = 2.0f;
+
+    // Center on the fractal text area (approx 160, 0 based on our path generation)
+    // Actually Hershey paths are centered around Y=0.
     
-    // Camera zooms in on this verse
-    float targetZoom = 3.0f;
-    cameraZoom = 1.0f + (targetZoom - 1.0f) * eased;
-    cameraX = layout.x;
-    cameraY = layout.y;
+    // Render current verse with fade
+    float alpha = progress < 0.2f ? progress * 5.0f : (progress > 0.8f ? (1.0f - progress) * 5.0f : 1.0f);
     
-    // Render all verses up to current one
-    for (uint8_t i = 0; i <= verseIdx; i++) {
-        const VerseLayout &vl = FINAL_LAYOUT[i];
-        float alpha = (i == verseIdx) ? eased : 1.0f;
-        
-        if (alpha > 0.01f) {
-            drawString(gTiles, verses[i], vl.x, vl.y, vl.scale * alpha, 
-                      vl.angle, vl.color, cameraX, cameraY, cameraZoom);
-        }
+    if (alpha > 0.01f) {
+        drawString(gTiles, verses[verseIdx], current.x, current.y, 0.5f,
+                  current.angle, getVerseColor(verseIdx), cameraX, cameraY, cameraZoom);
     }
 }
 
 void renderZoomOut(float progress) {
-    // Zoom out from closeup to reveal full composition
-    float startZoom = 3.0f;
-    float endZoom = 0.15f;
+    float startZoom = 2.0f;
+    float endZoom = 0.4f;
+    cameraZoom = startZoom + (endZoom - startZoom) * progress;
     
-    // Exponential zoom out
-    cameraZoom = startZoom * pow(endZoom / startZoom, progress);
+    cameraX = 180 * (1.0f - progress); // Moving to center
+    cameraY = 0;
     
-    // Center camera on the message center
-    cameraX = 160;
-    cameraY = 140;
-    
-    // Calculate decimation based on zoom level
-    decimation = max(1, (int)(15.0f * progress + 1));
-    
-    // Render all verses with pixel decimation
-    for (uint8_t i = 0; i < 28; i++) {
-        const VerseLayout &vl = FINAL_LAYOUT[i];
-        
-        // Only render every Nth character for decimation
-        int len = strlen(verses[i]);
-        for (int j = 0; j < len; j += decimation) {
-            int16_t cx = vl.x + j * (int)(10 * vl.scale);
-            
-            // Apply camera transform
-            int16_t screenX = (int16_t)((cx - cameraX) * cameraZoom) + tft.width() / 2;
-            int16_t screenY = (int16_t)((vl.y - cameraY) * cameraZoom) + tft.height() / 2;
-            
-            // Distance from screen center for proximity thresholding
-            float dist = sqrt(pow(screenX - tft.width()/2, 2) + pow(screenY - tft.height()/2, 2));
-            float threshold = 150 * (1.0f - progress);
-            
-            if (dist < threshold || progress > 0.7f) {
-                draw_glyph_into_tiles(gTiles, verses[i][j], screenX, screenY, 
-                                     vl.scale * cameraZoom, vl.angle, vl.color);
-            }
-        }
+    for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
+        PathPoint p = getVersePos(i);
+        drawString(gTiles, verses[i], p.x, p.y, 0.3f,
+                  p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
     }
 }
 
 void renderFinal() {
-    // Fully zoomed out - show the complete fractal composition
-    cameraX = 160;
-    cameraY = 140;
-    cameraZoom = 0.15f;
-    decimation = 4;
+    cameraX = 180;
+    cameraY = 0;
+    cameraZoom = 0.4f;
     
-    // Render all verses decimated
-    for (uint8_t i = 0; i < 28; i++) {
-        const VerseLayout &vl = FINAL_LAYOUT[i];
-        int len = strlen(verses[i]);
-        
-        for (int j = 0; j < len; j += decimation) {
-            int16_t cx = vl.x + j * (int)(10 * vl.scale);
-            int16_t screenX = (int16_t)((cx - cameraX) * cameraZoom) + tft.width() / 2;
-            int16_t screenY = (int16_t)((vl.y - cameraY) * cameraZoom) + tft.height() / 2;
-            
-            draw_glyph_into_tiles(gTiles, verses[i][j], screenX, screenY, 
-                                 vl.scale * cameraZoom, vl.angle, vl.color);
-        }
+    for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
+        PathPoint p = getVersePos(i);
+        drawString(gTiles, verses[i], p.x, p.y, 0.3f,
+                  p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
     }
     
     // Pulsing "Murmure" at bottom
