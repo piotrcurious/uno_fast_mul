@@ -357,7 +357,13 @@ void renderFlyby(uint8_t verseIdx, float progress) {
     // Camera follows characters
     cameraX = p1.x + (p2.x - p1.x) * t;
     cameraY = p1.y + (p2.y - p1.y) * t;
-    cameraAngle = p1.angle + (p2.angle - p1.angle) * t;
+
+    // Smooth angle interpolation handling rollover
+    float angleDiff = p2.angle - p1.angle;
+    while (angleDiff > 3.14159265f) angleDiff -= 6.2831853f;
+    while (angleDiff < -3.14159265f) angleDiff += 6.2831853f;
+    cameraAngle = p1.angle + angleDiff * t;
+
     cameraZoom = 4.0f;
 
     drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);

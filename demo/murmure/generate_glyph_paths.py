@@ -16,7 +16,20 @@ def get_strokes(lines):
                 strokes.append(current_stroke)
                 current_stroke = [p1, p2]
     if current_stroke: strokes.append(current_stroke)
-    return strokes
+
+    # Normalize stroke directions for reading order
+    normalized = []
+    for s in strokes:
+        if not s: continue
+        dx = s[-1][0] - s[0][0]
+        dy = s[-1][1] - s[0][1]
+        # Favor left-to-right, then top-to-bottom
+        if dx < -1.0: # Right-to-left
+            s = s[::-1]
+        elif abs(dx) < 1.0 and dy < -1.0: # Vertical, bottom-to-top
+            s = s[::-1]
+        normalized.append(s)
+    return normalized
 
 def get_stroke_length(stroke):
     return sum(math.sqrt((stroke[i+1][0]-stroke[i][0])**2 + (stroke[i+1][1]-stroke[i][1])**2) for i in range(len(stroke)-1))
@@ -103,8 +116,8 @@ def generate_paths(font_name="futural"):
         v_off.append(len(all_pts)); v_len.append(n); v_texts.append(txt)
         for i in range(n):
             x, y, a = samples[i]
-            if a > math.pi/2: a -= math.pi
-            elif a < -math.pi/2: a += math.pi
+            # No more aggressive individual flips; let them follow the stroke.
+            # However, we ensure the stroke was normalized to reading order above.
             all_pts.append((x, y + y_adj, a, 0.4 if v_idx in [0, 27] else 0.35))
 
     with open("glyph_paths.h", "w") as f:

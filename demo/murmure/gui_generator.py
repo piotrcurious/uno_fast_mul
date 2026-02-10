@@ -20,7 +20,17 @@ def get_strokes(lines):
                 strokes.append(current_stroke)
                 current_stroke = [p1, p2]
     if current_stroke: strokes.append(current_stroke)
-    return strokes
+
+    # Normalize stroke directions for reading order
+    normalized = []
+    for s in strokes:
+        if not s: continue
+        dx = s[-1][0] - s[0][0]
+        dy = s[-1][1] - s[0][1]
+        if dx < -1.0: s = s[::-1]
+        elif abs(dx) < 1.0 and dy < -1.0: s = s[::-1]
+        normalized.append(s)
+    return normalized
 
 def get_stroke_length(stroke):
     return sum(math.sqrt((stroke[i+1][0]-stroke[i][0])**2 + (stroke[i+1][1]-stroke[i][1])**2) for i in range(len(stroke)-1))
@@ -257,10 +267,6 @@ class GUIGenerator:
             wx, wy, wa = samples[i]
             wy += y_adj
 
-            # Normalize angle
-            if wa > math.pi/2: wa -= math.pi
-            elif wa < -math.pi/2: wa += math.pi
-
             # Get character strokes from font
             char_lines = list(self.font.lines_for_text(char))
 
@@ -451,8 +457,6 @@ class GUIGenerator:
                 v_off.append(len(all_pts)); v_len.append(n); v_texts.append(txt)
                 for i in range(n):
                     x, y, a_rad = samples[i]
-                    if a_rad > math.pi/2: a_rad -= math.pi
-                    elif a_rad < -math.pi/2: a_rad += math.pi
                     all_pts.append((x, y + y_adj, a_rad, self.verse_scale))
 
             with open(filename, "w") as f:
