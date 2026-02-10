@@ -271,7 +271,7 @@ void drawVerseCurved(TileManager &tiles, uint8_t verseIdx, uint16_t color,
         // Rotate world around camera
         float rx = dx * cosf(-camAngle) - dy * sinf(-camAngle);
         float ry = dx * sinf(-camAngle) + dy * cosf(-camAngle);
-        
+
         int16_t screenX = (int16_t)(rx * camZoom) + tft.width() / 2;
         int16_t screenY = (int16_t)(ry * camZoom) + tft.height() / 2;
 
@@ -331,10 +331,17 @@ void renderFlyby(uint8_t verseIdx, float progress) {
 
     drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);
 
-    // Render current verse
-    float alpha = progress < 0.1f ? progress * 10.0f : (progress > 0.9f ? (1.0f - progress) * 10.0f : 1.0f);
-    if (alpha > 0.01f) {
-        drawVerseCurved(gTiles, verseIdx, getVerseColor(verseIdx), cameraX, cameraY, cameraZoom, cameraAngle);
+    // Render all verses for context
+    for (uint8_t i = 0; i < NUM_VERSES; i++) {
+        uint16_t color = getVerseColor(i);
+        if (i != verseIdx) {
+            // Dim non-active verses
+            uint16_t r = ((color >> 11) & 0x1F) >> 1;
+            uint16_t g = ((color >> 5) & 0x3F) >> 1;
+            uint16_t b = (color & 0x1F) >> 1;
+            color = (r << 11) | (g << 5) | b;
+        }
+        drawVerseCurved(gTiles, i, color, cameraX, cameraY, cameraZoom, cameraAngle);
     }
 }
 
