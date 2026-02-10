@@ -75,6 +75,8 @@ class GUIGenerator:
         self.assignments = [] # List of {'stroke_id': int, 'verse': str}
         self.unassigned_verses = []
         self.selected_stroke_id = -1
+        self.selected_point_idx = -1
+        self.edit_mode = False # False: Verse Assignment, True: Stroke Edit
 
         # View transformations
         self.view_scale = 1.0
@@ -106,6 +108,9 @@ class GUIGenerator:
         tk.Button(top_frame, text="Load Font", command=self.browse_font).pack(side=tk.LEFT, padx=2)
         tk.Button(top_frame, text="Reset View", command=self.reset_view).pack(side=tk.LEFT, padx=2)
 
+        self.edit_mode_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(top_frame, text="Stroke Edit", variable=self.edit_mode_var, command=self.toggle_edit_mode).pack(side=tk.LEFT, padx=10)
+
         # Main area
         main_frame = tk.Frame(self.root)
         main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -119,6 +124,8 @@ class GUIGenerator:
 
         # Canvas bindings
         self.canvas.bind("<Button-1>", self.on_canvas_click)
+        self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
+        self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
         self.canvas.bind("<Button-3>", self.start_pan)
         self.canvas.bind("<B3-Motion>", self.do_pan)
         self.canvas.bind("<MouseWheel>", self.on_mouse_wheel) # Windows/macOS
@@ -126,34 +133,71 @@ class GUIGenerator:
         self.canvas.bind("<Button-5>", self.on_mouse_wheel)   # Linux scroll down
 
         # Right: Lists and Controls
-        right_frame = tk.Frame(main_frame, width=300)
-        right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
+        self.right_frame = tk.Frame(main_frame, width=300)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5)
 
-        # Unassigned Verses List
-        tk.Label(right_frame, text="Unassigned Verses:").pack(side=tk.TOP)
-        self.unassigned_list = tk.Listbox(right_frame, width=40, height=8)
+        # Verse Mode UI (parent: right_frame)
+        self.verse_mode_frame = tk.Frame(self.right_frame)
+        self.verse_mode_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        tk.Label(self.verse_mode_frame, text="Unassigned Verses:").pack(side=tk.TOP)
+        self.unassigned_list = tk.Listbox(self.verse_mode_frame, width=40, height=8)
         self.unassigned_list.pack(side=tk.TOP, fill=tk.X)
         self.unassigned_list.bind("<<ListboxSelect>>", self.on_unassigned_select)
 
-        # Assigned Verses List
-        tk.Label(right_frame, text="Assigned Verses (ID | Verse):").pack(side=tk.TOP, pady=(10, 0))
-        self.assigned_list = tk.Listbox(right_frame, width=40, height=12)
+        tk.Label(self.verse_mode_frame, text="Assigned Verses (ID | Verse):").pack(side=tk.TOP, pady=(10, 0))
+        self.assigned_list = tk.Listbox(self.verse_mode_frame, width=40, height=12)
         self.assigned_list.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.assigned_list.bind("<<ListboxSelect>>", self.on_assigned_select)
 
-        # Verse Text Entry
-        tk.Label(right_frame, text="Verse Editor:").pack(side=tk.TOP, pady=(10, 0))
-        self.verse_entry = tk.Entry(right_frame, width=40)
+        tk.Label(self.verse_mode_frame, text="Verse Editor:").pack(side=tk.TOP, pady=(10, 0))
+        self.verse_entry = tk.Entry(self.verse_mode_frame, width=40)
         self.verse_entry.pack(side=tk.TOP, fill=tk.X)
 
-        btn_frame = tk.Frame(right_frame)
+        btn_frame = tk.Frame(self.verse_mode_frame)
         btn_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
 
         tk.Button(btn_frame, text="Add New Verse", command=self.add_unassigned).pack(side=tk.LEFT, expand=True, fill=tk.X)
         tk.Button(btn_frame, text="Assign Selected", command=self.assign_selected).pack(side=tk.LEFT, expand=True, fill=tk.X)
 
-        tk.Button(right_frame, text="Unassign Selected", command=self.unassign_selected).pack(side=tk.TOP, fill=tk.X)
-        tk.Button(right_frame, text="Delete Selected Verse", command=self.delete_verse).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(self.verse_mode_frame, text="Unassign Selected", command=self.unassign_selected).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(self.verse_mode_frame, text="Delete Selected Verse", command=self.delete_verse).pack(side=tk.TOP, fill=tk.X)
+
+        # Stroke Edit Mode UI (parent: right_frame, initially hidden)
+        self.stroke_mode_frame = tk.Frame(self.right_frame)
+        # Initially hidden
+
+        tk.Label(self.stroke_mode_frame, text="Strokes:").pack(side=tk.TOP)
+        self.stroke_list = tk.Listbox(self.stroke_mode_frame, width=40, height=10)
+        self.stroke_list.pack(side=tk.TOP, fill=tk.X)
+        self.stroke_list.bind("<<ListboxSelect>>", self.on_stroke_list_select)
+
+        tk.Label(self.stroke_mode_frame, text="Selected Stroke Points:").pack(side=tk.TOP, pady=(10,0))
+        self.point_list = tk.Listbox(self.stroke_mode_frame, width=40, height=10)
+        self.point_list.pack(side=tk.TOP, fill=tk.X)
+        self.point_list.bind("<<ListboxSelect>>", self.on_point_list_select)
+
+        edit_p_frame = tk.Frame(self.stroke_mode_frame)
+        edit_p_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
+        tk.Label(edit_p_frame, text="X:").pack(side=tk.LEFT)
+        self.point_x_entry = tk.Entry(edit_p_frame, width=8)
+        self.point_x_entry.pack(side=tk.LEFT, padx=2)
+        tk.Label(edit_p_frame, text="Y:").pack(side=tk.LEFT)
+        self.point_y_entry = tk.Entry(edit_p_frame, width=8)
+        self.point_y_entry.pack(side=tk.LEFT, padx=2)
+        tk.Button(edit_p_frame, text="Set", command=self.set_point_coords).pack(side=tk.LEFT, padx=2)
+
+        stroke_btn_frame = tk.Frame(self.stroke_mode_frame)
+        stroke_btn_frame.pack(side=tk.TOP, fill=tk.X, pady=5)
+        tk.Button(stroke_btn_frame, text="Move Up", command=lambda: self.move_stroke_delta(0, -5)).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        tk.Button(stroke_btn_frame, text="Move Down", command=lambda: self.move_stroke_delta(0, 5)).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        tk.Button(stroke_btn_frame, text="Move Left", command=lambda: self.move_stroke_delta(-5, 0)).pack(side=tk.LEFT, expand=True, fill=tk.X)
+        tk.Button(stroke_btn_frame, text="Move Right", command=lambda: self.move_stroke_delta(5, 0)).pack(side=tk.LEFT, expand=True, fill=tk.X)
+
+        tk.Button(self.stroke_mode_frame, text="Delete Point", command=self.delete_point).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(self.stroke_mode_frame, text="Add Point After", command=self.add_point).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(self.stroke_mode_frame, text="Reverse Stroke", command=self.reverse_selected_stroke).pack(side=tk.TOP, fill=tk.X)
+        tk.Button(self.stroke_mode_frame, text="Delete Stroke", command=self.delete_stroke).pack(side=tk.TOP, fill=tk.X)
 
         # Bottom frame
         bottom_frame = tk.Frame(self.root)
@@ -196,31 +240,53 @@ class GUIGenerator:
         return ((sx - self.view_offset_x) / self.view_scale,
                 (sy - self.view_offset_y) / self.view_scale)
 
+    def toggle_edit_mode(self):
+        self.edit_mode = self.edit_mode_var.get()
+        if self.edit_mode:
+            self.verse_mode_frame.pack_forget()
+            self.stroke_mode_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.update_stroke_list()
+        else:
+            self.stroke_mode_frame.pack_forget()
+            self.verse_mode_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            self.update_verse_lists()
+        self.draw_everything()
+
     def update_text(self):
-        text = self.text_entry.get()
-        if not text or not self.font: return
-        self.target_text = text
+        text_raw = self.text_entry.get()
+        if not text_raw or not self.font: return
+        self.target_text = text_raw
         self.all_strokes = []
 
-        x_cursor = 0
-        stroke_id = 0
-        for char in text:
-            if char == ' ':
-                x_cursor += self.char_spacing
-                continue
-            lines = list(self.font.lines_for_text(char))
-            scaled = [((p1[0]*self.glyph_scale, p1[1]*self.glyph_scale), (p2[0]*self.glyph_scale, p2[1]*self.glyph_scale)) for p1, p2 in lines]
-            if not scaled:
-                x_cursor += 20
-                continue
-            min_x = min(p[0] for line in scaled for p in line)
-            max_x = max(p[0] for line in scaled for p in line)
-            for stroke in get_strokes(scaled):
-                adj = [(p[0] - min_x + x_cursor, p[1]) for p in stroke]
-                self.all_strokes.append({'char': char, 'stroke': adj, 'id': stroke_id})
-                stroke_id += 1
-            x_cursor += (max_x - min_x) + 25
+        # Support \n for multi-line
+        lines_text = text_raw.split("\\n")
 
+        stroke_id = 0
+        y_cursor = 0
+        line_height = 60
+
+        for line in lines_text:
+            x_cursor = 0
+            for char in line:
+                if char == ' ':
+                    x_cursor += self.char_spacing
+                    continue
+                lines = list(self.font.lines_for_text(char))
+                scaled = [((p1[0]*self.glyph_scale, p1[1]*self.glyph_scale), (p2[0]*self.glyph_scale, p2[1]*self.glyph_scale)) for p1, p2 in lines]
+                if not scaled:
+                    x_cursor += 20
+                    continue
+                min_x = min(p[0] for l in scaled for p in l)
+                max_x = max(p[0] for l in scaled for p in l)
+                for stroke in get_strokes(scaled):
+                    adj = [(p[0] - min_x + x_cursor, p[1] + y_cursor) for p in stroke]
+                    self.all_strokes.append({'char': char, 'stroke': adj, 'id': stroke_id})
+                    stroke_id += 1
+                x_cursor += (max_x - min_x) + 25
+            y_cursor += line_height
+
+        if self.edit_mode:
+            self.update_stroke_list()
         self.draw_everything()
 
     def draw_everything(self):
@@ -231,13 +297,21 @@ class GUIGenerator:
             color = "#000044" # Dim blue for strokes
             width = 1
 
-            if s['id'] == self.selected_stroke_id:
+            is_selected = (s['id'] == self.selected_stroke_id)
+            if is_selected:
                 color = "yellow"
                 width = 2
 
             screen_pts = [self.world_to_screen(p[0], p[1]) for p in pts]
             for i in range(len(screen_pts)-1):
                 self.canvas.create_line(screen_pts[i][0], screen_pts[i][1], screen_pts[i+1][0], screen_pts[i+1][1], fill=color, width=width)
+
+            # Draw points if in edit mode and stroke is selected
+            if self.edit_mode and is_selected:
+                for i, p in enumerate(screen_pts):
+                    p_color = "red" if i == self.selected_point_idx else "orange"
+                    r = 3 if i == self.selected_point_idx else 2
+                    self.canvas.create_oval(p[0]-r, p[1]-r, p[0]+r, p[1]+r, fill=p_color, outline=p_color)
 
             # Stroke ID Label
             mid_p = screen_pts[len(screen_pts)//2]
@@ -296,6 +370,23 @@ class GUIGenerator:
 
     def on_canvas_click(self, event):
         wx, wy = self.screen_to_world(event.x, event.y)
+        self.drag_start_world = (wx, wy)
+        self.is_dragging = False
+
+        # In edit mode, prioritize point selection if a stroke is already selected
+        if self.edit_mode and self.selected_stroke_id != -1:
+            try:
+                s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+                for i, p in enumerate(s['stroke']):
+                    d = math.sqrt((p[0]-wx)**2 + (p[1]-wy)**2)
+                    if d < 10 / self.view_scale:
+                        self.selected_point_idx = i
+                        self.is_dragging = True
+                        self.update_point_selection()
+                        self.draw_everything()
+                        return
+            except StopIteration: pass
+
         closest_id = -1
         min_dist = 20 / self.view_scale
 
@@ -307,19 +398,54 @@ class GUIGenerator:
                     closest_id = s['id']
 
         self.selected_stroke_id = closest_id
+        self.selected_point_idx = -1
+
+        if self.edit_mode:
+            self.update_stroke_selection()
+
         self.draw_everything()
 
         if closest_id != -1:
             self.status_label.config(text=f"Selected Stroke ID: {closest_id}")
-            # Highlight assigned verse if exists
-            for i, a in enumerate(self.assignments):
-                if a['stroke_id'] == closest_id:
-                    self.assigned_list.selection_clear(0, tk.END)
-                    self.assigned_list.selection_set(i)
-                    self.verse_entry.delete(0, tk.END)
-                    self.verse_entry.insert(0, a['verse'])
-                    return
-        self.assigned_list.selection_clear(0, tk.END)
+            if not self.edit_mode:
+                # Highlight assigned verse if exists
+                for i, a in enumerate(self.assignments):
+                    if a['stroke_id'] == closest_id:
+                        self.assigned_list.selection_clear(0, tk.END)
+                        self.assigned_list.selection_set(i)
+                        self.verse_entry.delete(0, tk.END)
+                        self.verse_entry.insert(0, a['verse'])
+                        return
+        if not self.edit_mode:
+            self.assigned_list.selection_clear(0, tk.END)
+
+    def on_canvas_drag(self, event):
+        if not self.edit_mode or self.selected_stroke_id == -1: return
+
+        wx, wy = self.screen_to_world(event.x, event.y)
+        dx = wx - self.drag_start_world[0]
+        dy = wy - self.drag_start_world[1]
+
+        try:
+            s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+            if self.selected_point_idx != -1:
+                # Drag individual point
+                orig_p = s['stroke'][self.selected_point_idx]
+                s['stroke'][self.selected_point_idx] = (orig_p[0] + dx, orig_p[1] + dy)
+            else:
+                # Drag whole stroke
+                s['stroke'] = [(p[0]+dx, p[1]+dy) for p in s['stroke']]
+
+            self.drag_start_world = (wx, wy)
+            self.is_dragging = True
+            self.draw_everything()
+            self.update_point_list()
+        except StopIteration: pass
+
+    def on_canvas_release(self, event):
+        if self.is_dragging:
+            self.update_point_selection()
+            self.is_dragging = False
 
     def dist_to_segment(self, p, s1, s2):
         px, py = p; x1, y1 = s1; x2, y2 = s2
@@ -327,6 +453,127 @@ class GUIGenerator:
         if dx == 0 and dy == 0: return math.sqrt((px-x1)**2 + (py-y1)**2)
         t = max(0, min(1, ((px-x1)*dx + (py-y1)*dy) / (dx*dx + dy*dy)))
         return math.sqrt((px-(x1 + t*dx))**2 + (py-(y1 + t*dy))**2)
+
+    # Stroke/Point Editing Methods
+    def update_stroke_list(self):
+        self.stroke_list.delete(0, tk.END)
+        for s in self.all_strokes:
+            self.stroke_list.insert(tk.END, f"ID: {s['id']} | Char: {s['char']} | Pts: {len(s['stroke'])}")
+        self.update_stroke_selection()
+
+    def update_stroke_selection(self):
+        self.stroke_list.selection_clear(0, tk.END)
+        for i, s in enumerate(self.all_strokes):
+            if s['id'] == self.selected_stroke_id:
+                self.stroke_list.selection_set(i)
+                self.stroke_list.see(i)
+                self.update_point_list()
+                return
+        self.point_list.delete(0, tk.END)
+
+    def on_stroke_list_select(self, event):
+        sel = self.stroke_list.curselection()
+        if sel:
+            self.selected_stroke_id = self.all_strokes[sel[0]]['id']
+            self.selected_point_idx = -1
+            self.update_point_list()
+            self.draw_everything()
+
+    def update_point_list(self):
+        self.point_list.delete(0, tk.END)
+        try:
+            s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+            for i, p in enumerate(s['stroke']):
+                self.point_list.insert(tk.END, f"{i}: ({p[0]:.1f}, {p[1]:.1f})")
+        except StopIteration: pass
+
+    def update_point_selection(self):
+        self.point_list.selection_clear(0, tk.END)
+        if self.selected_point_idx != -1:
+            self.point_list.selection_set(self.selected_point_idx)
+            self.point_list.see(self.selected_point_idx)
+            # Update entries
+            try:
+                s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+                p = s['stroke'][self.selected_point_idx]
+                self.point_x_entry.delete(0, tk.END)
+                self.point_x_entry.insert(0, f"{p[0]:.1f}")
+                self.point_y_entry.delete(0, tk.END)
+                self.point_y_entry.insert(0, f"{p[1]:.1f}")
+            except StopIteration: pass
+
+    def on_point_list_select(self, event):
+        sel = self.point_list.curselection()
+        if sel:
+            self.selected_point_idx = sel[0]
+            self.update_point_selection()
+            self.draw_everything()
+
+    def set_point_coords(self):
+        if self.selected_stroke_id == -1 or self.selected_point_idx == -1: return
+        try:
+            x = float(self.point_x_entry.get())
+            y = float(self.point_y_entry.get())
+            s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+            s['stroke'][self.selected_point_idx] = (x, y)
+            self.update_point_list()
+            self.update_point_selection()
+            self.draw_everything()
+        except ValueError: pass
+
+    def move_stroke_delta(self, dx, dy):
+        if self.selected_stroke_id == -1: return
+        try:
+            s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+            s['stroke'] = [(p[0]+dx, p[1]+dy) for p in s['stroke']]
+            self.update_point_list()
+            self.update_point_selection()
+            self.draw_everything()
+        except StopIteration: pass
+
+    def delete_point(self):
+        if self.selected_stroke_id == -1 or self.selected_point_idx == -1: return
+        s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+        if len(s['stroke']) <= 2:
+            messagebox.showwarning("Warning", "Stroke must have at least 2 points.")
+            return
+        s['stroke'].pop(self.selected_point_idx)
+        self.selected_point_idx = -1
+        self.update_point_list()
+        self.draw_everything()
+
+    def add_point(self):
+        if self.selected_stroke_id == -1: return
+        s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+        if self.selected_point_idx == -1:
+            # Add to end
+            p_last = s['stroke'][-1]
+            s['stroke'].append((p_last[0]+10, p_last[1]+10))
+        else:
+            p_curr = s['stroke'][self.selected_point_idx]
+            if self.selected_point_idx < len(s['stroke']) - 1:
+                p_next = s['stroke'][self.selected_point_idx + 1]
+                p_new = ((p_curr[0]+p_next[0])/2, (p_curr[1]+p_next[1])/2)
+                s['stroke'].insert(self.selected_point_idx + 1, p_new)
+            else:
+                s['stroke'].append((p_curr[0]+10, p_curr[1]+10))
+        self.update_point_list()
+        self.draw_everything()
+
+    def reverse_selected_stroke(self):
+        if self.selected_stroke_id == -1: return
+        s = next(s for s in self.all_strokes if s['id'] == self.selected_stroke_id)
+        s['stroke'] = s['stroke'][::-1]
+        self.update_point_list()
+        self.draw_everything()
+
+    def delete_stroke(self):
+        if self.selected_stroke_id == -1: return
+        if not messagebox.askyesno("Confirm", "Delete this stroke?"): return
+        self.all_strokes = [s for s in self.all_strokes if s['id'] != self.selected_stroke_id]
+        self.selected_stroke_id = -1
+        self.update_stroke_list()
+        self.draw_everything()
 
     # Panning and Zooming
     def start_pan(self, event):
@@ -462,6 +709,9 @@ class GUIGenerator:
             with open(filename, "w") as f:
                 f.write("// AUTO-GENERATED - ENHANCED INTERACTIVE GUI\n")
                 f.write(f"// META: TARGET_TEXT: {self.target_text}\n")
+                for s in self.all_strokes:
+                    pts_str = " ".join([f"{p[0]},{p[1]}" for p in s['stroke']])
+                    f.write(f"// META: STROKE: {s['id']} | {s['char']} | {pts_str}\n")
                 for a in self.assignments:
                     f.write(f"// META: ASSIGN: {a['stroke_id']} | {a['verse']}\n")
                 for v in self.unassigned_verses:
@@ -497,14 +747,28 @@ class GUIGenerator:
         if not filename: return
         try:
             with open(filename, "r") as f: content = f.read()
+
             target_match = re.search(r"// META: TARGET_TEXT: (.*)", content)
             if target_match:
                 self.text_entry.delete(0, tk.END)
                 self.text_entry.insert(0, target_match.group(1).strip())
-                self.update_text()
+                self.target_text = target_match.group(1).strip()
             else:
                 messagebox.showerror("Error", "No target text metadata found.")
                 return
+
+            # Prefer loading explicit strokes if present
+            found_strokes = re.findall(r"// META: STROKE: (\d+) \| (.*?) \| (.*)", content)
+            if found_strokes:
+                self.all_strokes = []
+                for s_id, char, pts_str in found_strokes:
+                    pts = []
+                    for pair in pts_str.split():
+                        x, y = pair.split(",")
+                        pts.append((float(x), float(y)))
+                    self.all_strokes.append({'id': int(s_id), 'char': char, 'stroke': pts})
+            else:
+                self.update_text()
 
             self.assignments = []
             for s_id, verse in re.findall(r"// META: ASSIGN: (\d+) \| (.*)", content):
@@ -512,7 +776,9 @@ class GUIGenerator:
 
             self.unassigned_verses = re.findall(r"// META: UNASSIGNED: (.*)", content)
 
-            self.update_verse_lists()
+            if self.edit_mode: self.update_stroke_list()
+            else: self.update_verse_lists()
+
             self.reset_view()
             self.status_label.config(text=f"Loaded project: {os.path.basename(filename)}")
         except Exception as e:
