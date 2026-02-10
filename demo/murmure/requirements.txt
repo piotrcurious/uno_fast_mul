@@ -1,0 +1,4 @@
+Hershey-Fonts
+Pillow
+numpy
+matplotlib

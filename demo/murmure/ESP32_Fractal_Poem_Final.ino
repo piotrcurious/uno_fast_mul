@@ -243,11 +243,19 @@ const char* verses[28] = {
     "Le fractal est immense."
 };
 
-// Helper to get verse position from PROGMEM
-static inline PathPoint getVersePos(uint8_t idx) {
+// Helper to get character position from flat PROGMEM array
+static inline PathPoint getVerseCharPos(uint8_t verseIdx, uint8_t charIdx) {
+    uint16_t offset;
+    memcpy_P(&offset, &VERSE_OFFSETS[verseIdx], 2);
     PathPoint p;
-    memcpy_P(&p, &VERSE_POSITIONS[idx], sizeof(PathPoint));
+    memcpy_P(&p, &ALL_VERSE_CHARS[offset + charIdx], sizeof(PathPoint));
     return p;
+}
+
+static inline uint8_t getVerseLen(uint8_t verseIdx) {
+    uint8_t len;
+    memcpy_P(&len, &VERSE_LENGTHS[verseIdx], 1);
+    return len;
 }
 
 uint16_t getVerseColor(uint8_t idx) {
@@ -272,36 +280,53 @@ const uint32_t FLYBY_DURATION = 1800;   // 1.8s per verse
 const uint32_t ZOOM_DURATION = 5000;    // 5s zoom out
 
 // Camera position
-float cameraX = 0, cameraY = 0, cameraZoom = 1.0f;
+float cameraX = 0, cameraY = 0, cameraZoom = 1.0f, cameraAngle = 0.0f;
 uint8_t decimation = 1;
 
 // -------------------- Rendering Functions --------------------
 
-void drawString(TileManager &tiles, const char* str, int16_t x, int16_t y, 
-                float scale, float angle, uint16_t color, float camX, float camY, float camZoom) {
-    int len = strlen(str);
+void drawVerseCurved(TileManager &tiles, uint8_t verseIdx, uint16_t color,
+                        float camX, float camY, float camZoom, float camAngle) {
+    uint8_t len = getVerseLen(verseIdx);
+    const char* str = verses[verseIdx];
+
     for (int i = 0; i < len; i++) {
-        int16_t cx = x + i * (int)(GLYPH_WIDTH * 0.8f * scale);
+        PathPoint p = getVerseCharPos(verseIdx, i);
+
+        float dx = p.x - camX;
+        float dy = p.y - camY;
         
-        // Apply camera transform
-        int16_t screenX = (int16_t)((cx - camX) * camZoom) + tft.width() / 2;
-        int16_t screenY = (int16_t)((y - camY) * camZoom) + tft.height() / 2;
+        // Rotate world around camera
+        float rx = dx * cosf(-camAngle) - dy * sinf(-camAngle);
+        float ry = dx * sinf(-camAngle) + dy * cosf(-camAngle);
         
-        draw_glyph_into_tiles(tiles, str[i], screenX, screenY, scale * camZoom, angle, color);
+        int16_t screenX = (int16_t)(rx * camZoom) + tft.width() / 2;
+        int16_t screenY = (int16_t)(ry * camZoom) + tft.height() / 2;
+
+        // Draw character rotated relative to camera
+        draw_glyph_into_tiles(tiles, str[i], screenX, screenY, p.scale * camZoom, p.angle - camAngle, color);
     }
 }
 
 // Debug path rendering
-void drawDebugPath(TileManager &tiles, float camX, float camY, float camZoom) {
+void drawDebugPath(TileManager &tiles, float camX, float camY, float camZoom, float camAngle) {
     for (int i=0; i<NUM_MASTER_SEGMENTS; ++i) {
         Segment s;
         memcpy_P(&s, &MASTER_PATH[i], sizeof(Segment));
 
-        // Transform coordinates
-        int16_t x1 = (int16_t)((s.x1 - camX) * camZoom) + tft.width() / 2;
-        int16_t y1 = (int16_t)((s.y1 - camY) * camZoom) + tft.height() / 2;
-        int16_t x2 = (int16_t)((s.x2 - camX) * camZoom) + tft.width() / 2;
-        int16_t y2 = (int16_t)((s.y2 - camY) * camZoom) + tft.height() / 2;
+        auto transformX = [&](float x, float y) {
+            float dx = x - camX; float dy = y - camY;
+            return (int16_t)((dx * cosf(-camAngle) - dy * sinf(-camAngle)) * camZoom) + tft.width() / 2;
+        };
+        auto transformY = [&](float x, float y) {
+            float dx = x - camX; float dy = y - camY;
+            return (int16_t)((dx * sinf(-camAngle) + dy * cosf(-camAngle)) * camZoom) + tft.height() / 2;
+        };
+
+        int16_t x1 = transformX(s.x1, s.y1);
+        int16_t y1 = transformY(s.x1, s.y1);
+        int16_t x2 = transformX(s.x2, s.y2);
+        int16_t y2 = transformY(s.x2, s.y2);
 
         // Simple line drawing into tiles (just points for now for speed/simplicity)
         float dx = x2 - x1;
@@ -315,56 +340,58 @@ void drawDebugPath(TileManager &tiles, float camX, float camY, float camZoom) {
 }
 
 void renderFlyby(uint8_t verseIdx, float progress) {
-    PathPoint current = getVersePos(verseIdx);
-    PathPoint next = getVersePos((verseIdx + 1) % NUM_SAMPLES);
+    uint8_t len = getVerseLen(verseIdx);
     
-    // Interpolate camera position along the path between verses
-    cameraX = current.x + (next.x - current.x) * progress;
-    cameraY = current.y + (next.y - current.y) * progress;
-    cameraZoom = 2.0f;
+    // Map progress to character index
+    float charProgress = progress * (len - 1);
+    uint8_t c1 = (uint8_t)charProgress;
+    uint8_t c2 = min((int)c1 + 1, (int)len - 1);
+    float t = charProgress - c1;
 
-    // Draw master path in debug mode
-    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
+    PathPoint p1 = getVerseCharPos(verseIdx, c1);
+    PathPoint p2 = getVerseCharPos(verseIdx, c2);
     
-    // Render current verse with fade
-    float alpha = progress < 0.2f ? progress * 5.0f : (progress > 0.8f ? (1.0f - progress) * 5.0f : 1.0f);
+    // Camera follows characters
+    cameraX = p1.x + (p2.x - p1.x) * t;
+    cameraY = p1.y + (p2.y - p1.y) * t;
+    cameraAngle = p1.angle + (p2.angle - p1.angle) * t;
+    cameraZoom = 4.0f;
 
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);
+
+    // Render current verse
+    float alpha = progress < 0.1f ? progress * 10.0f : (progress > 0.9f ? (1.0f - progress) * 10.0f : 1.0f);
     if (alpha > 0.01f) {
-        drawString(gTiles, verses[verseIdx], current.x, current.y, current.scale,
-                  current.angle, getVerseColor(verseIdx), cameraX, cameraY, cameraZoom);
+        drawVerseCurved(gTiles, verseIdx, getVerseColor(verseIdx), cameraX, cameraY, cameraZoom, cameraAngle);
     }
 }
 
 void renderZoomOut(float progress) {
-    float startZoom = 2.0f;
-    float endZoom = 0.4f;
+    float startZoom = 4.0f;
+    float endZoom = 0.2f;
     cameraZoom = startZoom + (endZoom - startZoom) * progress;
     
-    cameraX = 180 * (1.0f - progress); // Moving to center
+    cameraX = 600 * (1.0f - progress);
     cameraY = 0;
+    cameraAngle *= 0.9f; // Straighten camera
     
-    // Draw master path in debug mode
-    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);
 
-    for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
-        PathPoint p = getVersePos(i);
-        drawString(gTiles, verses[i], p.x, p.y, p.scale * 0.6f,
-                  p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
+    for (uint8_t i = 0; i < NUM_VERSES; i++) {
+        drawVerseCurved(gTiles, i, getVerseColor(i), cameraX, cameraY, cameraZoom, cameraAngle);
     }
 }
 
 void renderFinal() {
-    cameraX = 180;
+    cameraX = 600;
     cameraY = 0;
-    cameraZoom = 0.4f;
+    cameraZoom = 0.2f;
+    cameraAngle = 0;
     
-    // Draw master path in debug mode
-    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom);
+    drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);
 
-    for (uint8_t i = 0; i < NUM_SAMPLES; i++) {
-        PathPoint p = getVersePos(i);
-        drawString(gTiles, verses[i], p.x, p.y, p.scale * 0.6f,
-                  p.angle, getVerseColor(i), cameraX, cameraY, cameraZoom);
+    for (uint8_t i = 0; i < NUM_VERSES; i++) {
+        drawVerseCurved(gTiles, i, getVerseColor(i), cameraX, cameraY, cameraZoom, cameraAngle);
     }
     
     // Pulsing "Murmure" at bottom
