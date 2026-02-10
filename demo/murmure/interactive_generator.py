@@ -142,6 +142,9 @@ class InteractiveGenerator:
             f.write(f"// META: TARGET_TEXT: {self.target_text}\n")
             for a in self.assignments:
                 f.write(f"// META: ASSIGN: {a['stroke_id']} | {a['verse']}\n")
+            if hasattr(self, 'unassigned_verses'):
+                for v in self.unassigned_verses:
+                    f.write(f"// META: UNASSIGNED: {v}\n")
             f.write("\n")
             f.write("#ifndef GLYPH_PATHS_H\n#define GLYPH_PATHS_H\n#include <stdint.h>\n#include <Arduino.h>\n")
             f.write("struct PathPoint { float x, y, angle, scale; };\n")
@@ -177,6 +180,7 @@ class InteractiveGenerator:
             self.assignments = []
             for s_id, verse in assign_matches:
                 self.assign_verse(int(s_id), verse)
+            self.unassigned_verses = re.findall(r"// META: UNASSIGNED: (.*)", content)
             print(f"Loaded from {filename}")
         except Exception as e:
             print(f"Error loading: {e}")
