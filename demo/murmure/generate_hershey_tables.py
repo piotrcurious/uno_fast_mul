@@ -1,11 +1,11 @@
 
 import math
-from HersheyFonts import HersheyFonts
+import argparse
+from hershey_parser import load_font
 from PIL import Image, ImageDraw
 
-def generate():
-    fonts = HersheyFonts()
-    fonts.load_default_font('futural')
+def generate(font_name="futural"):
+    font = load_font(font_name)
 
     chars = " !\"',.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
     escaped_chars = chars.replace('"', '\\"').replace("'", "\\'")
@@ -23,7 +23,7 @@ def generate():
         img = Image.new('1', (glyph_w, glyph_h), 0)
         draw = ImageDraw.Draw(img)
 
-        lines = list(fonts.lines_for_text(ch))
+        lines = list(font.lines_for_text(ch))
         # Center them. Hershey y goes from -12 to 9 approx.
         # Let's map y=-12 to row 2, y=9 to row 20?
         # x varies.
@@ -96,4 +96,7 @@ def generate():
     print(f"Generated arduino_tables.h with {len(chars)} glyphs and math tables.")
 
 if __name__ == "__main__":
-    generate()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--font", default="futural", help="Hershey font name or path")
+    args = parser.parse_args()
+    generate(args.font)

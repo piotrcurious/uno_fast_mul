@@ -3,7 +3,7 @@ import math
 import re
 import sys
 import matplotlib.pyplot as plt
-from HersheyFonts import HersheyFonts
+from hershey_parser import load_font
 
 # Helper functions for stroke management
 def get_strokes(lines):
@@ -54,9 +54,8 @@ def sample_stroke(stroke, num_samples):
     return samples
 
 class InteractiveGenerator:
-    def __init__(self):
-        self.fonts = HersheyFonts()
-        self.fonts.load_default_font('futural')
+    def __init__(self, font_name="futural"):
+        self.font = load_font(font_name)
         self.target_text = ""
         self.all_strokes = [] # List of {'char': c, 'stroke': pts, 'id': int}
         self.assignments = [] # List of {'stroke_id': int, 'verse': str}
@@ -73,7 +72,7 @@ class InteractiveGenerator:
             if char == ' ':
                 x_off += self.char_spacing
                 continue
-            lines = list(self.fonts.lines_for_text(char))
+            lines = list(self.font.lines_for_text(char))
             scaled = [((p1[0]*self.glyph_scale, p1[1]*self.glyph_scale), (p2[0]*self.glyph_scale, p2[1]*self.glyph_scale)) for p1, p2 in lines]
             if not scaled:
                 x_off += 20
@@ -208,6 +207,11 @@ def main():
                     print("Usage: assign <stroke_id> <verse_text>")
             elif cmd == 'preview':
                 gen.preview()
+            elif cmd == 'font':
+                gen.font = load_font(args)
+                if gen.target_text:
+                    gen.set_target_text(gen.target_text)
+                print(f"Font loaded: {args}")
             elif cmd == 'save':
                 gen.save_header(args if args else "glyph_paths.h")
             elif cmd == 'load':
@@ -215,7 +219,7 @@ def main():
             elif cmd in ['exit', 'quit']:
                 break
             elif cmd == 'help':
-                print("Commands: text <text>, list, assign <id> <verse>, preview, save [file], load [file], exit")
+                print("Commands: font <name|path>, text <text>, list, assign <id> <verse>, preview, save [file], load [file], exit")
             else:
                 print("Unknown command. Type 'help'.")
         except EOFError:

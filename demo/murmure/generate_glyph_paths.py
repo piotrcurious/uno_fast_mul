@@ -1,6 +1,7 @@
 
 import math
-from HersheyFonts import HersheyFonts
+import argparse
+from hershey_parser import load_font
 
 def get_strokes(lines):
     if not lines: return []
@@ -48,9 +49,8 @@ def sample_stroke(stroke, num_samples):
         if not found: samples.append((stroke[-1][0], stroke[-1][1], 0))
     return samples
 
-def generate_paths():
-    fonts = HersheyFonts()
-    fonts.load_default_font('futural')
+def generate_paths(font_name="futural"):
+    font = load_font(font_name)
     target_text = "Le fractal est immense"
     verses = [
         "L'hiver hesite, presage.", "L'oiseau se tait, presage.",
@@ -72,7 +72,7 @@ def generate_paths():
     x_off = 0; char_spacing = 80; all_strokes = []
     for char in target_text:
         if char == ' ': x_off += char_spacing; continue
-        lines = list(fonts.lines_for_text(char))
+        lines = list(font.lines_for_text(char))
         scaled = [((p1[0]*2.5, p1[1]*2.5), (p2[0]*2.5, p2[1]*2.5)) for p1, p2 in lines]
         min_x = min(p[0] for line in scaled for p in line) if scaled else 0
         max_x = max(p[0] for line in scaled for p in line) if scaled else 0
@@ -135,4 +135,7 @@ def generate_paths():
         f.write("};\n#endif\n")
 
 if __name__ == "__main__":
-    generate_paths()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--font", default="futural", help="Hershey font name or path")
+    args = parser.parse_args()
+    generate_paths(args.font)
