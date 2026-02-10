@@ -94,13 +94,13 @@ def generate_paths():
             s_idx = used_c.index(min(used_c))
             stroke_assign[i] = s_idx; used_c[s_idx] += 1
 
-    all_pts = []; v_off = []; v_len = []
+    all_pts = []; v_off = []; v_len = []; v_texts = []
     for v_idx in range(num_v):
         s_idx = stroke_assign[v_idx]; s_info = all_strokes[s_idx]; txt = verses[v_idx]; n = len(txt)
         samples = sample_stroke(s_info['stroke'], n)
         reused = sum(1 for prev in range(v_idx) if stroke_assign[prev] == s_idx)
         y_adj = (reused - 0.5 * (used_c[s_idx]-1)) * 15
-        v_off.append(len(all_pts)); v_len.append(n)
+        v_off.append(len(all_pts)); v_len.append(n); v_texts.append(txt)
         for i in range(n):
             x, y, a = samples[i]
             if a > math.pi/2: a -= math.pi
@@ -108,6 +108,11 @@ def generate_paths():
             all_pts.append((x, y + y_adj, a, 0.4 if v_idx in [0, 27] else 0.35))
 
     with open("glyph_paths.h", "w") as f:
+        f.write("// AUTO-GENERATED - NON-INTERACTIVE\n")
+        f.write(f"// META: TARGET_TEXT: {target_text}\n")
+        for i, v in enumerate(stroke_assign):
+            f.write(f"// META: ASSIGN: {v} | {verses[i]}\n")
+        f.write("\n")
         f.write("#ifndef GLYPH_PATHS_H\n#define GLYPH_PATHS_H\n#include <stdint.h>\n#include <Arduino.h>\n")
         f.write("struct PathPoint { float x, y, angle, scale; };\n")
         f.write(f"#define TOTAL_VERSE_CHARS {len(all_pts)}\n")
@@ -117,6 +122,10 @@ def generate_paths():
         f.write(f"}};\n#define NUM_VERSES {num_v}\n")
         f.write(f"const uint16_t VERSE_OFFSETS[NUM_VERSES] PROGMEM = {{ {', '.join(map(str, v_off))} }};\n")
         f.write(f"const uint8_t VERSE_LENGTHS[NUM_VERSES] PROGMEM = {{ {', '.join(map(str, v_len))} }};\n")
+        f.write("const char* const VERSES[NUM_VERSES] PROGMEM = {\n")
+        for i, txt in enumerate(v_texts):
+            f.write(f"  \"{txt}\"{',' if i < len(v_texts)-1 else ''}\n")
+        f.write("};\n")
         all_segs = [(s['stroke'][i], s['stroke'][i+1]) for s in all_strokes for i in range(len(s['stroke'])-1)]
         f.write(f"#define NUM_MASTER_SEGMENTS {len(all_segs)}\n")
         f.write("struct Segment { float x1, y1, x2, y2; };\n")

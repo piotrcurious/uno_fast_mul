@@ -211,37 +211,7 @@ void draw_glyph_into_tiles(TileManager &tiles, char ch, int16_t cx, int16_t cy,
 }
 
 // -------------------- Poem Data --------------------
-
-const char* verses[28] = {
-    "L'hiver hesite, presage.",
-    "L'oiseau se tait, presage.",
-    "L'eau moins fraiche, presage.",
-    "L'echo s'eloigne, presage.",
-    "Murmure, petit murmure.",
-    "Fractal de la rupture.",
-    "Repete le trouble, repete.",
-    "Le monde change en cachette.",
-    "Fleur en decembre, presage.",
-    "Pluie en ete, presage.",
-    "Vent sans saison, presage.",
-    "Ciel incertain, presage.",
-    "Murmure, petit murmure.",
-    "Fractal de la rupture.",
-    "Repete le trouble, repete.",
-    "Le monde change en cachette.",
-    "Rats s'enfuient, presage.",
-    "Mensonge use, presage.",
-    "Foi qui baisse, presage.",
-    "Pouvoir las, presage.",
-    "Murmure, petit murmure.",
-    "Fractal de la rupture.",
-    "Repete le trouble, repete.",
-    "Le monde change en cachette.",
-    "Chaque nuance, meme instance.",
-    "Le grand schema s'avance.",
-    "Ecoute bien, enfin sens.",
-    "Le fractal est immense."
-};
+// Verses and paths are included from glyph_paths.h
 
 // Helper to get character position from flat PROGMEM array
 static inline PathPoint getVerseCharPos(uint8_t verseIdx, uint8_t charIdx) {
@@ -288,7 +258,9 @@ uint8_t decimation = 1;
 void drawVerseCurved(TileManager &tiles, uint8_t verseIdx, uint16_t color,
                         float camX, float camY, float camZoom, float camAngle) {
     uint8_t len = getVerseLen(verseIdx);
-    const char* str = verses[verseIdx];
+    char buf[128];
+    strcpy_P(buf, (char*)pgm_read_ptr(&(VERSES[verseIdx])));
+    const char* str = buf;
 
     for (int i = 0; i < len; i++) {
         PathPoint p = getVerseCharPos(verseIdx, i);
@@ -433,7 +405,7 @@ void loop() {
                 renderFlyby(currentVerse, progress);
             } else {
                 currentVerse++;
-                if (currentVerse >= 28) {
+                if (currentVerse >= NUM_VERSES) {
                     currentPhase = ZOOM_OUT;
                     Serial.println("Starting zoom out");
                 }
