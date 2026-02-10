@@ -1,126 +1,163 @@
-// ESP32_Fractal_Poem_Final.ino
-// Verses appear one by one, then camera reveals they form "Le fractal est immense"
-
 #include <Arduino.h>
-#include <TFT_eSPI.h>
+#define LGFX_USE_V1
+#include <LovyanGFX.hpp>
 #include <esp_heap_caps.h>
 
 // include generated tables & glyphs
 #include "arduino_tables.h"
 #include "glyph_paths.h"
 
-// ---------------------- Config ----------------------
-#define LOG_Q 8
-#define TILE_SIZE 64
-#define MAX_OUTSTANDING_DMA 4
+#define SWAP_RGB(c) (((c) << 8) | ((c) >> 8))
 
-TFT_eSPI tft = TFT_eSPI();
+// ------------------ Hardware Configuration ------------------
+class LGFX_ESP32 : public lgfx::LGFX_Device {
+    lgfx::Panel_Device* _panel_instance;
+    lgfx::Bus_SPI* _bus_instance;
+public:
+    LGFX_ESP32() {
+        auto bus = new lgfx::Bus_SPI();
+        auto panel = new lgfx::Panel_ST7789();
+        {
+            auto cfg = bus->config();
+            cfg.spi_host = VSPI_HOST;
+            cfg.spi_mode = 0;
+            cfg.freq_write = 80000000;
+            cfg.freq_read  = 16000000;
+            cfg.pin_sclk = 18;
+            cfg.pin_mosi = 23;
+            cfg.pin_miso = -1;
+            cfg.pin_dc   = 16;
+            bus->config(cfg);
+        }
+        _bus_instance = bus;
+        panel->setBus(bus);
+        {
+            auto cfg = panel->config();
+            cfg.pin_cs           = 5;
+            cfg.pin_rst          = 17;
+            cfg.pin_busy         = -1;
+            cfg.panel_width      = 240;
+            cfg.panel_height     = 320;
+            cfg.offset_x         = 0;
+            cfg.offset_y         = 0;
+            cfg.offset_rotation  = 0;
+            cfg.dummy_read_pixel = 8;
+            cfg.dummy_read_bits  = 1;
+            cfg.readable         = true;
+            cfg.invert           = true;
+            cfg.rgb_order        = false;
+            cfg.dlen_16bit       = false;
+            cfg.bus_shared       = true;
+            panel->config(cfg);
+        }
+        _panel_instance = panel;
+        setPanel(panel);
+    }
+};
+
+LGFX_ESP32 tft;
+
+// ------------------ Configuration ------------------
+#define TILE_SIZE 8         // minimum size is 8 (32bit align)
+#define LOG_Q 8
+#define SIN_Q 15
+#define SIN_SIZE 512
 
 // ------------------ Tile-based Compositor ------------------
 
 struct Tile {
-    uint16_t x0, y0, w, h;
-    uint16_t *buf;
-    bool dirty;
-    
-    Tile(): x0(0), y0(0), w(0), h(0), buf(nullptr), dirty(false) {}
-    
-    void init(uint16_t _x0, uint16_t _y0, uint16_t _w, uint16_t _h) {
-        x0 = _x0; y0 = _y0; w = _w; h = _h;
-        size_t n = (size_t)w * (size_t)h;
-        if (buf) free(buf);
-        buf = (uint16_t*) heap_caps_malloc(n * sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_8BIT);
-        if (!buf) buf = (uint16_t*) malloc(n * sizeof(uint16_t));
-        dirty = false;
-        if (buf) memset(buf, 0, n * sizeof(uint16_t));
-    }
-    
-    void clearTo(uint16_t color = 0x0000) {
-        if (!buf) return;
-        size_t n = (size_t)w * (size_t)h;
-        if (color == 0) memset(buf, 0, n * sizeof(uint16_t));
-        else for (size_t i=0; i<n; ++i) buf[i] = color;
-        dirty = true;
-    }
+  uint16_t x0, y0;
+  uint16_t w, h;
+  uint16_t *buf;
+  bool dirty_curr;   // Changed in current frame
+  bool dirty_prev;   // Changed in previous frame
 
-    inline void writePixelLocal(int16_t lx, int16_t ly, uint16_t color) {
-        if (!buf || lx < 0 || ly < 0 || lx >= (int)w || ly >= (int)h) return;
-        buf[ly * w + lx] = color;
-        dirty = true;
-    }
+  Tile(): x0(0), y0(0), w(0), h(0), buf(nullptr), dirty_curr(false), dirty_prev(false) {}
 
-    void freeBuf() {
-        if (buf) { free(buf); buf = nullptr; }
+  void init(uint16_t _x0, uint16_t _y0, uint16_t _w, uint16_t _h) {
+    x0 = _x0; y0 = _y0; w = _w; h = _h;
+    size_t n = (size_t)w * (size_t)h;
+    if (buf) { free(buf); buf = nullptr; }
+    
+    buf = (uint16_t*) heap_caps_malloc(n * sizeof(uint16_t), MALLOC_CAP_DMA | MALLOC_CAP_32BIT);
+    if (!buf) buf = (uint16_t*) malloc(n * sizeof(uint16_t));
+    
+    dirty_curr = false;
+    dirty_prev = false;
+    if (buf) memset(buf, 0, n * sizeof(uint16_t));
+  }
+
+  void prepareFrame(uint16_t bgcolor) {
+    if (dirty_prev || dirty_curr) {
+      size_t n = (size_t)w * (size_t)h;
+      if (bgcolor == 0) memset(buf, 0, n * sizeof(uint16_t));
+      else {
+        for (size_t i=0; i<n; ++i) buf[i] = bgcolor;
+      }
     }
+    dirty_prev = dirty_curr;
+    dirty_curr = false;
+  }
+
+  inline void writePixelLocal(int16_t lx, int16_t ly, uint16_t color) {
+    if (!buf || lx < 0 || ly < 0 || lx >= (int)w || ly >= (int)h) return;
+    buf[ly * w + lx] = color;
+    dirty_curr = true;
+  }
 };
 
 struct TileManager {
-    uint16_t screen_w, screen_h, tile_size, cols, rows;
-    Tile *tiles;
+  uint16_t screen_w, screen_h;
+  uint16_t tile_size;
+  uint16_t cols, rows;
+  Tile *tiles;
 
-    TileManager(): screen_w(0), screen_h(0), tile_size(TILE_SIZE), cols(0), rows(0), tiles(nullptr) {}
+  TileManager(): tiles(nullptr) {}
 
-    void init(uint16_t sw, uint16_t sh, uint16_t tsize=TILE_SIZE) {
-        screen_w = sw; screen_h = sh; tile_size = tsize;
-        cols = (screen_w + tile_size - 1) / tile_size;
-        rows = (screen_h + tile_size - 1) / tile_size;
-        size_t count = (size_t)cols * rows;
-        tiles = (Tile*)malloc(sizeof(Tile) * count);
-        
-        for (uint16_t r=0; r<rows; ++r) {
-            for (uint16_t c=0; c<cols; ++c) {
-                uint16_t x0 = c * tile_size;
-                uint16_t y0 = r * tile_size;
-                uint16_t w = min((int)tile_size, (int)(screen_w - x0));
-                uint16_t h = min((int)tile_size, (int)(screen_h - y0));
-                Tile &t = tiles[r*cols + c];
-                new (&t) Tile();
-                t.init(x0, y0, w, h);
-            }
-        }
+  void init(uint16_t sw, uint16_t sh, uint16_t tsize=TILE_SIZE) {
+    screen_w = sw; screen_h = sh; tile_size = tsize;
+    cols = (screen_w + tile_size - 1) / tile_size;
+    rows = (screen_h + tile_size - 1) / tile_size;
+    size_t count = (size_t)cols * rows;
+    tiles = (Tile*)malloc(sizeof(Tile) * count);
+
+    for (uint16_t r=0; r<rows; ++r) {
+      for (uint16_t c=0; c<cols; ++c) {
+        uint16_t x0 = c * tile_size;
+        uint16_t y0 = r * tile_size;
+        uint16_t w = min((int)tile_size, (int)(screen_w - x0));
+        uint16_t h = min((int)tile_size, (int)(screen_h - y0));
+        Tile &t = tiles[r*cols + c];
+        new (&t) Tile();
+        t.init(x0, y0, w, h);
+      }
     }
+  }
 
-    inline Tile &tileAtIdx(uint16_t tx, uint16_t ty) { return tiles[ty * cols + tx]; }
+  inline void writePixelGlobal(int16_t x, int16_t y, uint16_t color) {
+    if (x < 0 || y < 0 || x >= (int)screen_w || y >= (int)screen_h) return;
+    uint16_t tx = x / tile_size;
+    uint16_t ty = y / tile_size;
+    tiles[ty * cols + tx].writePixelLocal(x - (tx * tile_size), y - (ty * tile_size), color);
+  }
 
-    inline bool coordToTile(int16_t x, int16_t y, uint16_t &tx, uint16_t &ty) {
-        if (x < 0 || y < 0 || x >= (int)screen_w || y >= (int)screen_h) return false;
-        tx = x / tile_size; ty = y / tile_size;
-        return true;
+  void startFrame(uint16_t bgcolor = 0x0000) {
+    uint32_t count = (uint32_t)cols * rows;
+    for (uint32_t i=0; i<count; ++i) tiles[i].prepareFrame(bgcolor);
+  }
+
+  void flush(LGFX_ESP32 &tft_ref) {
+    uint32_t count = (uint32_t)cols * rows;
+    for (uint32_t i=0; i < count; ++i) {
+      Tile &t = tiles[i];
+      if (t.dirty_curr || t.dirty_prev) {
+        tft_ref.pushImage(t.x0, t.y0, t.w, t.h, t.buf);
+      }
     }
-
-    void frameClear(uint16_t bgcolor = 0x0000) {
-        for (uint32_t i=0; i<(uint32_t)cols*rows; ++i) tiles[i].clearTo(bgcolor);
-    }
-
-    inline void writePixelGlobal(int16_t x, int16_t y, uint16_t color) {
-        uint16_t tx, ty;
-        if (!coordToTile(x, y, tx, ty)) return;
-        Tile &t = tileAtIdx(tx, ty);
-        t.writePixelLocal(x - t.x0, y - t.y0, color);
-    }
-
-    void flush(TFT_eSPI &tft) {
-        uint16_t outstanding = 0;
-        for (uint32_t i=0; i<(uint32_t)cols*rows; ++i) {
-            Tile &t = tiles[i];
-            if (!t.dirty) continue;
-            tft.pushImageDMA(t.x0, t.y0, t.w, t.h, t.buf);
-            outstanding++;
-            if (outstanding >= MAX_OUTSTANDING_DMA) {
-                while (tft.dmaBusy()) { yield(); }
-                outstanding = 0;
-            }
-            t.dirty = false;
-        }
-        while (tft.dmaBusy()) { yield(); }
-    }
-
-    void deinit() {
-        if (!tiles) return;
-        for (size_t i=0; i<(size_t)cols*rows; ++i) tiles[i].freeBuf();
-        free(tiles); tiles = nullptr;
-    }
+  }
 };
+
+TileManager gTiles;
 
 // ------------------ Fast Math ------------------
 
@@ -210,9 +247,6 @@ void draw_glyph_into_tiles(TileManager &tiles, char ch, int16_t cx, int16_t cy,
     }
 }
 
-// -------------------- Poem Data --------------------
-// Verses and paths are included from glyph_paths.h
-
 // Helper to get character position from flat PROGMEM array
 static inline PathPoint getVerseCharPos(uint8_t verseIdx, uint8_t charIdx) {
     uint16_t offset;
@@ -235,12 +269,10 @@ uint16_t getVerseColor(uint8_t idx) {
 
 // -------------------- Scene State --------------------
 
-TileManager gTiles;
-
 enum Phase { 
     FLYBY,        // Camera flies by each verse
     ZOOM_OUT,     // Zoom out to reveal full message
-    FINAL         // Show complete message with decimation
+    FINAL         // Show complete message
 };
 
 Phase currentPhase = FLYBY;
@@ -251,7 +283,6 @@ const uint32_t ZOOM_DURATION = 5000;    // 5s zoom out
 
 // Camera position
 float cameraX = 0, cameraY = 0, cameraZoom = 1.0f, cameraAngle = 0.0f;
-uint8_t decimation = 1;
 
 // -------------------- Rendering Functions --------------------
 
@@ -389,21 +420,20 @@ void renderFinal() {
 void setup() {
     Serial.begin(115200);
     tft.init();
-    tft.initDMA();
     tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
     
     gTiles.init(tft.width(), tft.height(), TILE_SIZE);
     phaseStartMs = millis();
     
-    Serial.println("Fractal Poem - Camera Flyby");
+    Serial.println("Fractal Poem - Camera Flyby Optimized");
 }
 
 void loop() {
     uint32_t now = millis();
     uint32_t elapsed = now - phaseStartMs;
     
-    gTiles.frameClear(0x0000);
+    gTiles.startFrame(0x0000);
     
     switch(currentPhase) {
         case FLYBY:
@@ -438,9 +468,7 @@ void loop() {
             break;
     }
     
-    tft.startWrite();
     gTiles.flush(tft);
-    tft.endWrite();
     
     delay(16); // ~60fps
 }
