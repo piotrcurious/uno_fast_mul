@@ -96,6 +96,12 @@ class GUIGenerator:
         self.root = root
         self.root.title("Murmure - Enhanced Graphical Path Generator")
 
+        self.glyph_width = 16
+        self.glyph_height = 24
+        self.glyph_chars = ""
+        self.glyph_bitmaps = []
+        self.load_arduino_tables()
+
         self.font = None
         self.target_text = ""
         self.all_strokes = []
@@ -236,6 +242,31 @@ class GUIGenerator:
         self.status_label = tk.Label(bottom_frame, text="Ready", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.pack(side=tk.RIGHT, fill=tk.X, expand=True)
 
+    def load_arduino_tables(self):
+        try:
+            with open("arduino_tables.h", "r") as f:
+                content = f.read()
+
+            w_match = re.search(r"#define GLYPH_WIDTH (\d+)", content)
+            h_match = re.search(r"#define GLYPH_HEIGHT (\d+)", content)
+            if w_match: self.glyph_width = int(w_match.group(1))
+            if h_match: self.glyph_height = int(h_match.group(1))
+
+            list_match = re.search(r"GLYPH_CHAR_LIST\[\d+\] PROGMEM = \"(.*?)\";", content)
+            if list_match:
+                # Handle escapes in the C string
+                raw_list = list_match.group(1)
+                self.glyph_chars = raw_list.replace('\\"', '"').replace("\\'", "'")
+
+            # Extract bitmaps
+            bitmap_block = re.search(r"GLYPH_BITMAPS\[\d+\] PROGMEM = \{(.*?)\};", content, re.DOTALL)
+            if bitmap_block:
+                vals = re.findall(r"0x[0-9A-Fa-f]+|\d+", bitmap_block.group(1))
+                self.glyph_bitmaps = [int(v, 0) for v in vals]
+
+        except Exception as e:
+            print(f"Error loading arduino_tables.h: {e}")
+
     def load_default_font(self):
         try:
             self.font = load_font("futural")
@@ -367,37 +398,44 @@ class GUIGenerator:
         samples = sample_stroke(stroke, len(text))
         color = "#00FF00" if text else "#888888"
 
+        gw, gh = self.glyph_width, self.glyph_height
+
         for i, char in enumerate(text):
             if i >= len(samples): break
             wx, wy, wa = samples[i]
             wy += y_adj
 
-            # Get character strokes from font
-            char_lines = list(self.font.lines_for_text(char))
+            idx = self.glyph_chars.find(char)
+            if idx < 0: continue
 
-            # Transform each line of the character
-            for p1, p2 in char_lines:
-                # 1. Scale character
-                p1s = (p1[0] * self.verse_scale, p1[1] * self.verse_scale)
-                p2s = (p2[0] * self.verse_scale, p2[1] * self.verse_scale)
+            bitmap = self.glyph_bitmaps[idx * gw : (idx + 1) * gw]
 
-                # 2. Rotate character
-                def rot(p, angle):
-                    c, s = math.cos(angle), math.sin(angle)
-                    return (p[0]*c - p[1]*s, p[0]*s + p[1]*c)
+            cos_a = math.cos(wa)
+            sin_a = math.sin(wa)
 
-                p1r = rot(p1s, wa)
-                p2r = rot(p2s, wa)
+            # Draw bitmap pixels transformed
+            for col in range(gw):
+                col_val = bitmap[col]
+                if not col_val: continue
+                for row in range(gh):
+                    if col_val & (1 << row):
+                        # Local coords relative to glyph center
+                        sx = (col - gw / 2) * self.verse_scale
+                        sy = (row - gh / 2) * self.verse_scale
 
-                # 3. Translate to world position
-                p1w = (p1r[0] + wx, p1r[1] + wy)
-                p2w = (p2r[0] + wx, p2r[1] + wy)
+                        # Rotate
+                        rx = sx * cos_a - sy * sin_a
+                        ry = sx * sin_a + sy * cos_a
 
-                # 4. Map to screen
-                s1 = self.world_to_screen(p1w[0], p1w[1])
-                s2 = self.world_to_screen(p2w[0], p2w[1])
+                        # Translate & Project to screen
+                        px, py = self.world_to_screen(wx + rx, wy + ry)
 
-                self.canvas.create_line(s1[0], s1[1], s2[0], s2[1], fill=color, width=1)
+                        # Optimization: if too small, skip or draw single pixel
+                        if self.view_scale * self.verse_scale > 2:
+                            r = max(1, int(self.view_scale * self.verse_scale / 2))
+                            self.canvas.create_rectangle(px-r, py-r, px+r, py+r, fill=color, outline="")
+                        else:
+                            self.canvas.create_line(px, py, px+1, py, fill=color)
 
     def on_canvas_click(self, event):
         wx, wy = self.screen_to_world(event.x, event.y)
