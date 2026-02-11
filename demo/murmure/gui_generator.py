@@ -100,6 +100,11 @@ class GUIGenerator:
         self.glyph_height = 24
         self.glyph_chars = ""
         self.glyph_bitmaps = []
+
+        self.view_scale = 1.0
+        self.view_offset_x = 50
+        self.view_offset_y = 250
+
         self.load_arduino_tables()
 
         self.font = None
@@ -252,11 +257,20 @@ class GUIGenerator:
             if w_match: self.glyph_width = int(w_match.group(1))
             if h_match: self.glyph_height = int(h_match.group(1))
 
-            list_match = re.search(r"GLYPH_CHAR_LIST\[\d+\] PROGMEM = \"(.*?)\";", content)
+            # Use a more robust regex for C string literals that might contain escaped quotes
+            list_match = re.search(r'GLYPH_CHAR_LIST\[\d+\] PROGMEM = ("(?:[^"\\]|\\.)*");', content)
             if list_match:
-                # Handle escapes in the C string
                 raw_list = list_match.group(1)
-                self.glyph_chars = raw_list.replace('\\"', '"').replace("\\'", "'")
+                # Use Python's literal_eval to safely parse the C-style string literal
+                # (which is mostly compatible with Python's string literal)
+                import ast
+                try:
+                    self.glyph_chars = ast.literal_eval(raw_list)
+                except:
+                    # Fallback to manual replacement if literal_eval fails
+                    if raw_list.startswith('"') and raw_list.endswith('"'):
+                        raw_list = raw_list[1:-1]
+                    self.glyph_chars = raw_list.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
 
             # Extract bitmaps
             bitmap_block = re.search(r"GLYPH_BITMAPS\[\d+\] PROGMEM = \{(.*?)\};", content, re.DOTALL)
@@ -264,15 +278,21 @@ class GUIGenerator:
                 vals = re.findall(r"0x[0-9A-Fa-f]+|\d+", bitmap_block.group(1))
                 self.glyph_bitmaps = [int(v, 0) for v in vals]
 
+            if not self.glyph_chars or not self.glyph_bitmaps:
+                print("Warning: arduino_tables.h loaded but glyphs seem empty.")
+
         except Exception as e:
             print(f"Error loading arduino_tables.h: {e}")
 
     def load_default_font(self):
-        try:
-            self.font = load_font("futural")
-            self.status_label.config(text="Font loaded: futural")
-        except:
-            self.status_label.config(text="Default font not found.")
+        for name in ["futural", "futuram", "timesr"]:
+            try:
+                self.font = load_font(name)
+                self.status_label.config(text=f"Font loaded: {name}")
+                return
+            except:
+                continue
+        self.status_label.config(text="Error: Could not load any default font. Please use 'Load Font'.")
 
     def browse_font(self):
         filename = filedialog.askopenfilename(title="Select Hershey Font (.jhf)", filetypes=[("JHF files", "*.jhf"), ("All files", "*.*")])
@@ -312,7 +332,16 @@ class GUIGenerator:
 
     def update_text(self):
         text_raw = self.text_entry.get()
-        if not text_raw or not self.font: return
+        if not text_raw: return
+        if not self.font:
+            self.status_label.config(text="Error: No font loaded.")
+            return
+
+        if not hasattr(self.font, 'strokes_for_text'):
+            self.status_label.config(text="Error: Font object missing 'strokes_for_text'.")
+            print(f"DEBUG: font type: {type(self.font)}, dir: {dir(self.font)}")
+            return
+
         self.target_text = text_raw
         self.all_strokes = []
 
@@ -356,7 +385,7 @@ class GUIGenerator:
         # Draw target text strokes
         for s in self.all_strokes:
             pts = s['stroke']
-            color = "#000044" # Dim blue for strokes
+            color = "#4444AA" # Brighter blue for strokes
             width = 1
 
             is_selected = (s['id'] == self.selected_stroke_id)
