@@ -19,11 +19,11 @@ inline uint32_t get_sim_millis() { return sim_millis; }
 
 int main() {
     arduino_setup();
-    // Simulate 200 frames to see camera movement
-    for(int i=0; i<400; i++) {
+    // Simulate to see camera movement
+    for(int i=0; i<3000; i++) {
         sim_millis += 16; // 60 fps
         arduino_loop();
-        if (i % 40 == 0) {
+        if (i % 100 == 0) {
             char buf[64]; sprintf(buf, "frame_%d.ppm", i);
             tft.savePPM(buf);
         }

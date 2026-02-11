@@ -56,20 +56,24 @@ class HersheyFont:
                 # print(f"Error parsing line {i}: {e}")
                 continue
 
-    def lines_for_text(self, text):
-        """Returns generator of ((x1, y1), (x2, y2)) for the text.
-           Note: This implementation is per-character for compatibility with existing scripts.
-        """
+    def strokes_for_text(self, text):
+        """Returns generator of strokes (lists of (x,y) points) for the text."""
+        x_offset = 0
         for char in text:
             if char in self.glyphs:
                 glyph = self.glyphs[char]
-                # To match previous library behavior, we can normalize x so it starts at 0
-                # or just return as is if the scripts handle centering.
-                # Scripts used: adj = [(p[0] - min_x + x_off, p[1]) for p in stroke]
-                # So they handle normalization themselves.
                 for stroke in glyph['strokes']:
-                    for i in range(len(stroke)-1):
-                        yield (stroke[i], stroke[i+1])
+                    # Offset stroke by cumulative width
+                    yield [(p[0] + x_offset, p[1]) for p in stroke]
+                x_offset += glyph['width']
+            elif char == ' ':
+                x_offset += 20 # Default space width
+
+    def lines_for_text(self, text):
+        """Returns generator of ((x1, y1), (x2, y2)) for the text."""
+        for stroke in self.strokes_for_text(text):
+            for i in range(len(stroke)-1):
+                yield (stroke[i], stroke[i+1])
 
 def load_font(name_or_path):
     # Try system path first

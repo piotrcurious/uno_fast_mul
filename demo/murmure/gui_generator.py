@@ -7,19 +7,41 @@ import os
 from hershey_parser import load_font
 
 # Helper functions for stroke management
-def get_strokes(lines):
-    if not lines: return []
-    strokes = []
-    current_stroke = []
-    for p1, p2 in lines:
-        if not current_stroke:
-            current_stroke.append(p1); current_stroke.append(p2)
-        else:
-            if p1 == current_stroke[-1]: current_stroke.append(p2)
-            else:
-                strokes.append(current_stroke)
-                current_stroke = [p1, p2]
-    if current_stroke: strokes.append(current_stroke)
+def get_strokes(initial_strokes):
+    if not initial_strokes: return []
+    strokes = [list(s) for s in initial_strokes]
+
+    # Smart join strokes that share endpoints
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(strokes)):
+            for j in range(i + 1, len(strokes)):
+                s1 = strokes[i]
+                s2 = strokes[j]
+                if not s1 or not s2: continue
+
+                # Check all 4 connection possibilities
+                if s1[-1] == s2[0]:
+                    s1.extend(s2[1:])
+                    strokes[j] = []
+                    changed = True; break
+                elif s1[-1] == s2[-1]:
+                    s1.extend(s2[::-1][1:])
+                    strokes[j] = []
+                    changed = True; break
+                elif s1[0] == s2[-1]:
+                    s2.extend(s1[1:])
+                    strokes[i] = s2
+                    strokes[j] = []
+                    changed = True; break
+                elif s1[0] == s2[0]:
+                    s1 = s2[::-1] + s1[1:]
+                    strokes[i] = s1
+                    strokes[j] = []
+                    changed = True; break
+            if changed: break
+        strokes = [s for s in strokes if s]
 
     # Normalize stroke directions for reading order
     normalized = []
@@ -38,30 +60,35 @@ def get_stroke_length(stroke):
 def sample_stroke(stroke, num_samples):
     total_l = get_stroke_length(stroke)
     if num_samples <= 0: return []
+
+    pts = []
     if num_samples == 1:
-        mid = 0.5 * total_l
-        curr = 0
-        for i in range(len(stroke)-1):
-            p1, p2 = stroke[i], stroke[i+1]
-            l = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2)
-            if curr <= mid <= curr + l:
-                t = (mid - curr) / l if l > 0 else 0
-                return [(p1[0] + t*(p2[0]-p1[0]), p1[1] + t*(p2[1]-p1[1]), math.atan2(p2[1]-p1[1], p2[0]-p1[0]))]
-            curr += l
-        return [(stroke[0][0], stroke[0][1], 0)]
-    samples = []
-    for s_idx in range(num_samples):
-        target = (s_idx / (num_samples - 1)) * total_l
+        target_ls = [0.5 * total_l]
+    else:
+        target_ls = [(s_idx / (num_samples - 1)) * total_l for s_idx in range(num_samples)]
+
+    for target in target_ls:
         curr = 0; found = False
         for i in range(len(stroke)-1):
             p1, p2 = stroke[i], stroke[i+1]
             l = math.sqrt((p2[0]-p1[0])**2 + (p2[1]-p1[1])**2)
-            if curr <= target <= curr + l:
+            if curr <= target <= curr + l + 1e-6:
                 t = (target - curr) / l if l > 0 else 0
-                samples.append((p1[0] + t*(p2[0]-p1[0]), p1[1] + t*(p2[1]-p1[1]), math.atan2(p2[1]-p1[1], p2[0]-p1[0])))
+                pts.append((p1[0] + t*(p2[0]-p1[0]), p1[1] + t*(p2[1]-p1[1])))
                 found = True; break
             curr += l
-        if not found: samples.append((stroke[-1][0], stroke[-1][1], 0))
+        if not found: pts.append(stroke[-1])
+
+    samples = []
+    for i in range(len(pts)):
+        if len(pts) > 1:
+            if i == 0: p1, p2 = pts[0], pts[1]
+            elif i == len(pts) - 1: p1, p2 = pts[-2], pts[-1]
+            else: p1, p2 = pts[i-1], pts[i+1]
+            angle = math.atan2(p2[1]-p1[1], p2[0]-p1[0])
+        else:
+            angle = math.atan2(stroke[-1][1]-stroke[0][1], stroke[-1][0]-stroke[0][0]) if len(stroke) > 1 else 0
+        samples.append((pts[i][0], pts[i][1], angle))
     return samples
 
 class GUIGenerator:
@@ -271,16 +298,20 @@ class GUIGenerator:
                 if char == ' ':
                     x_cursor += self.char_spacing
                     continue
-                lines = list(self.font.lines_for_text(char))
-                scaled = [((p1[0]*self.glyph_scale, p1[1]*self.glyph_scale), (p2[0]*self.glyph_scale, p2[1]*self.glyph_scale)) for p1, p2 in lines]
-                if not scaled:
+                raw_strokes = list(self.font.strokes_for_text(char))
+                scaled_strokes = [[(p[0]*self.glyph_scale, p[1]*self.glyph_scale) for p in s] for s in raw_strokes]
+                if not scaled_strokes:
                     x_cursor += 20
                     continue
-                min_x = min(p[0] for l in scaled for p in l)
-                max_x = max(p[0] for l in scaled for p in l)
-                for stroke in get_strokes(scaled):
-                    adj = [(p[0] - min_x + x_cursor, p[1] + y_cursor) for p in stroke]
-                    self.all_strokes.append({'char': char, 'stroke': adj, 'id': stroke_id})
+                min_x = min(p[0] for s in scaled_strokes for p in s)
+                max_x = max(p[0] for s in scaled_strokes for p in s)
+
+                # Adjust strokes to start from 0 for this character
+                adj_strokes = [[(p[0] - min_x, p[1]) for p in s] for s in scaled_strokes]
+
+                for stroke in get_strokes(adj_strokes):
+                    final_stroke = [(p[0] + x_cursor, p[1] + y_cursor) for p in stroke]
+                    self.all_strokes.append({'char': char, 'stroke': final_stroke, 'id': stroke_id})
                     stroke_id += 1
                 x_cursor += (max_x - min_x) + 25
             y_cursor += line_height
