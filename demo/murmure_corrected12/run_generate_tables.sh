@@ -1,0 +1,1 @@
+python3 generate_tables.py  --out arduino_tables.h --log-q 8 --msb-size 256 --log-size 256 --exp-frac-size 256 --sin-cos-q 8 --persp-size 512 --gen-atan --gen-stereo --gen-float --font-file /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf --font-size 18 --glyph-chars '! "'\'' ,.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890' --glyph-w 16 --glyph-h 24
