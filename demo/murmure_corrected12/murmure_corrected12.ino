@@ -7,6 +7,7 @@
 #include "arduino_tables.h"
 #include "glyph_paths.h"
 
+#define DEBUG_PATH_COLOR 0x0
 #define SWAP_RGB(c) (((c) << 8) | ((c) >> 8))
 
 // ------------------ Hardware Configuration ------------------
@@ -349,7 +350,7 @@ void drawDebugPath(TileManager &tiles, float camX, float camY, float camZoom, fl
         float len = sqrt(dx*dx + dy*dy);
         if (len < 1) continue;
         for (float t=0; t<=1.0f; t += 1.0f/len) {
-            tiles.writePixelGlobal(x1 + dx*t, y1 + dy*t, 0x03E0); // Dim green
+            tiles.writePixelGlobal(x1 + dx*t, y1 + dy*t, DEBUG_PATH_COLOR); // 
         }
     }
 }
@@ -441,7 +442,7 @@ void renderFinal() {
     cameraX = 300;
     cameraY = 0;
     cameraZoom = 0.4f;
-    if ((cameraAngle += 0.01) >TWO_PI) {cameraAngle=0;currentPhase = FLYBY;currentVerse = 0;phaseStartMs = 0; } ;
+    if ((cameraAngle += 0.01) >TWO_PI) {cameraAngle=0;currentPhase = FLYBY;currentVerse = 0;phaseStartMs = millis(); } ;
     
     drawDebugPath(gTiles, cameraX, cameraY, cameraZoom, cameraAngle);
 
