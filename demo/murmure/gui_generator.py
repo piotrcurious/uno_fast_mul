@@ -249,37 +249,53 @@ class GUIGenerator:
 
     def load_arduino_tables(self):
         try:
+            if not os.path.exists("arduino_tables.h"):
+                print("arduino_tables.h not found.")
+                return
+
             with open("arduino_tables.h", "r") as f:
                 content = f.read()
 
-            w_match = re.search(r"#define GLYPH_WIDTH (\d+)", content)
-            h_match = re.search(r"#define GLYPH_HEIGHT (\d+)", content)
-            if w_match: self.glyph_width = int(w_match.group(1))
-            if h_match: self.glyph_height = int(h_match.group(1))
+            # 1. Parse Width/Height (Handle #define or const)
+            w_match = re.search(r"(?:#define\s+GLYPH_WIDTH\s+(\d+))|(?:GLYPH_WIDTH\s*=\s*(\d+))", content)
+            h_match = re.search(r"(?:#define\s+GLYPH_HEIGHT\s+(\d+))|(?:GLYPH_HEIGHT\s*=\s*(\d+))", content)
 
-            # Use a more robust regex for C string literals that might contain escaped quotes
-            list_match = re.search(r'GLYPH_CHAR_LIST\[\d+\] PROGMEM = ("(?:[^"\\]|\\.)*");', content)
+            if w_match:
+                val = w_match.group(1) or w_match.group(2)
+                if val: self.glyph_width = int(val)
+            if h_match:
+                val = h_match.group(1) or h_match.group(2)
+                if val: self.glyph_height = int(val)
+
+            # 2. Parse Character List (Handle varying PROGMEM position)
+            list_match = re.search(r'GLYPH_CHAR_LIST\[\d+\].*?=\s*("(?:[^"\\]|\\.)*");', content)
             if list_match:
                 raw_list = list_match.group(1)
-                # Use Python's literal_eval to safely parse the C-style string literal
-                # (which is mostly compatible with Python's string literal)
                 import ast
                 try:
                     self.glyph_chars = ast.literal_eval(raw_list)
                 except:
-                    # Fallback to manual replacement if literal_eval fails
+                    # Fallback
                     if raw_list.startswith('"') and raw_list.endswith('"'):
                         raw_list = raw_list[1:-1]
                     self.glyph_chars = raw_list.replace('\\"', '"').replace("\\'", "'").replace("\\\\", "\\")
 
-            # Extract bitmaps
-            bitmap_block = re.search(r"GLYPH_BITMAPS\[\d+\] PROGMEM = \{(.*?)\};", content, re.DOTALL)
+            # 3. Parse Bitmaps (Handle varying PROGMEM position)
+            bitmap_block = re.search(r"GLYPH_BITMAPS\[\d+\].*?=\s*\{(.*?)\};", content, re.DOTALL)
             if bitmap_block:
                 vals = re.findall(r"0x[0-9A-Fa-f]+|\d+", bitmap_block.group(1))
                 self.glyph_bitmaps = [int(v, 0) for v in vals]
 
             if not self.glyph_chars or not self.glyph_bitmaps:
-                print("Warning: arduino_tables.h loaded but glyphs seem empty.")
+                msg = "Warning: arduino_tables.h loaded but glyphs seem empty."
+                print(msg)
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text=msg)
+            else:
+                msg = f"Loaded {len(self.glyph_chars)} glyphs from arduino_tables.h"
+                print(msg)
+                if hasattr(self, 'status_label'):
+                    self.status_label.config(text=msg)
 
         except Exception as e:
             print(f"Error loading arduino_tables.h: {e}")
