@@ -10,9 +10,12 @@ def verify_bitmaps():
     height = int(re.search(r"GLYPH_HEIGHT (\d+)", content).group(1))
     chars_match = re.search(r'GLYPH_CHAR_LIST\[.*?\] PROGMEM = "(.*?)";', content)
     if not chars_match:
-        # try without PROGMEM
         chars_match = re.search(r'GLYPH_CHAR_LIST\[.*?\] = "(.*?)";', content)
-    chars = chars_match.group(1)
+
+    # Handle escaped characters in regex result
+    chars_raw = chars_match.group(1)
+    # Simple unescape for common ones
+    chars = chars_raw.replace('\\"', '"').replace("\\'", "'")
 
     bitmaps_match = re.search(r"GLYPH_BITMAPS\[.*?\] PROGMEM = \{(.*?)\};", content, re.DOTALL)
     if not bitmaps_match:

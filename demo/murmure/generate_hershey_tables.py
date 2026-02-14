@@ -1,13 +1,14 @@
 
 import math
-from HersheyFonts import HersheyFonts
+import argparse
+from hershey_parser import load_font
 from PIL import Image, ImageDraw
 
-def generate():
-    fonts = HersheyFonts()
-    fonts.load_default_font('futural')
+def generate(font_name="futural"):
+    font = load_font(font_name)
 
     chars = " !\"',.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    escaped_chars = chars.replace('"', '\\"').replace("'", "\\'")
     glyph_w = 16
     glyph_h = 24 # Hershey needs a bit more height
 
@@ -22,7 +23,7 @@ def generate():
         img = Image.new('1', (glyph_w, glyph_h), 0)
         draw = ImageDraw.Draw(img)
 
-        lines = list(fonts.lines_for_text(ch))
+        lines = list(font.lines_for_text(ch))
         # Center them. Hershey y goes from -12 to 9 approx.
         # Let's map y=-12 to row 2, y=9 to row 20?
         # x varies.
@@ -80,7 +81,7 @@ def generate():
         f.write(f"#define GLYPH_WIDTH {glyph_w}\n")
         f.write(f"#define GLYPH_HEIGHT {glyph_h}\n")
         f.write(f"#define GLYPH_COUNT {len(chars)}\n")
-        f.write(f'const char GLYPH_CHAR_LIST[{len(chars)+1}] PROGMEM = "{chars}";\n\n')
+        f.write(f'const char GLYPH_CHAR_LIST[{len(chars)+1}] PROGMEM = "{escaped_chars}";\n\n')
 
         glyph_type = "uint32_t" if glyph_h > 16 else "uint16_t"
         f.write(f"const {glyph_type} GLYPH_BITMAPS[{len(chars) * glyph_w}] PROGMEM = {{\n")
@@ -95,4 +96,7 @@ def generate():
     print(f"Generated arduino_tables.h with {len(chars)} glyphs and math tables.")
 
 if __name__ == "__main__":
-    generate()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--font", default="futural", help="Hershey font name or path")
+    args = parser.parse_args()
+    generate(args.font)
