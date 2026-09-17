@@ -19,6 +19,15 @@ using namespace FMT;
         } \
     } while(0)
 
+#define EXPECT_EQ(val, target) \
+    do { \
+        auto v = (val); \
+        auto t = (target); \
+        if (v != t) { \
+            std::cout << "FAIL: " << #val << " (" << v << ") expected equal to " << #target << " (" << t << ")" << std::endl; \
+        } \
+    } while(0)
+
 void test_core() {
     std::cout << "Testing FMT_Core..." << std::endl;
     // fast_msb32
@@ -94,8 +103,6 @@ void test_3d() {
     Mat3 B = mat3_rotation_euler(0, 0, 16384); // 90 deg around Z
     Mat3 C = mat3_mul_mat(&A, &B);
     Vec3 vr = mat3_mul_vec(&C, v1);
-    // Rotate (1,0,0) by Z then Y -> (0,1,0) then (0,1,0) wait.
-    // Z rotate (1,0,0) -> (0,1,0). Y rotate (0,1,0) -> (0,1,0).
     EXPECT_NEAR(q16_to_float(vr.y), 1.0f, 0.01f);
 
     Quat q1 = quat_from_axis_angle(0, 0x10000, 0, 16384);
@@ -143,8 +150,6 @@ void test_3d() {
     Mat4 Mp = mat4_perspective(0x10000); // focal 1.0
     Vec4 v5 = {0, 0x10000, 0x10000, 0x10000}; // (0,1,1)
     Vec4 vp5 = mat4_mul_vec4(&Mp, v5);
-    // x = 0, y = 1*1 = 1, z = 1, w = 1*1 + 1*1 = 2
-    // perspective divide y/w = 0.5
     EXPECT_NEAR(q16_to_float(vp5.y) / q16_to_float(vp5.w), 0.5f, 0.01f);
 
     // Ray-Plane
@@ -183,9 +188,84 @@ void test_fused_pipeline() {
     EXPECT_NEAR(q16_to_float(vp1.y), q16_to_float(vp2.y), 0.1f);
 }
 
+void test_tile_rasterizer() {
+    std::cout << "Testing FMT_Tile..." << std::endl;
+
+    TileManager<uint16_t> tm;
+    tm.init(64, 48, 16);
+
+    EXPECT_EQ(tm.cols, 4);
+    EXPECT_EQ(tm.rows, 3);
+
+    // Frame 1 initialization
+    tm.startFrame(0x0000);
+
+    // Write pixel at (17, 5) -> Tile (1, 0), Local (1, 5)
+    tm.writePixelGlobal(17, 5, 0xF800);
+    EXPECT_EQ(tm.readPixelGlobal(17, 5), 0xF800);
+
+    Tile<uint16_t> *t10 = tm.tileAtIdx(1, 0);
+    EXPECT_EQ(t10 != nullptr, true);
+    if (t10) {
+        EXPECT_EQ(t10->dirty_curr, true);
+        EXPECT_EQ(t10->readPixelLocal(1, 5), 0xF800);
+    }
+
+    // Test block writing
+    tm.writePixelBlock(32, 16, 2, 0x07E0); // Tile (2, 1)
+    EXPECT_EQ(tm.readPixelGlobal(32, 16), 0x07E0);
+    EXPECT_EQ(tm.readPixelGlobal(33, 17), 0x07E0);
+
+    // Test line drawing
+    tm.drawLine(0, 0, 10, 10, 0x001F);
+    EXPECT_EQ(tm.readPixelGlobal(0, 0), 0x001F);
+    EXPECT_EQ(tm.readPixelGlobal(5, 5), 0x001F);
+    EXPECT_EQ(tm.readPixelGlobal(10, 10), 0x001F);
+
+    // Test flush count
+    int flushed_tiles = 0;
+    tm.flush([&flushed_tiles](uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* buf) {
+        flushed_tiles++;
+    });
+    // Expected flushed tiles: (1,0), (2,1), (0,0) -> 3 tiles
+    EXPECT_EQ(flushed_tiles, 3);
+
+    // Frame 2: Start new frame (smart clearing)
+    tm.startFrame(0x0000);
+    // After startFrame, dirty_prev should be true for flushed tiles, dirty_curr should be false, and buffer zeroed.
+    EXPECT_EQ(tm.readPixelGlobal(17, 5), 0x0000);
+    if (t10) {
+        EXPECT_EQ(t10->dirty_curr, false);
+        EXPECT_EQ(t10->dirty_prev, true);
+    }
+
+    // Write no new pixels in frame 2
+    flushed_tiles = 0;
+    tm.flush([&flushed_tiles](uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* buf) {
+        flushed_tiles++;
+    });
+    // Frame 2 flush should still output those 3 previously dirty tiles to clear them on the display hardware!
+    EXPECT_EQ(flushed_tiles, 3);
+
+    // Frame 3: Start new frame without any modifications in frame 2
+    tm.startFrame(0x0000);
+    if (t10) {
+        EXPECT_EQ(t10->dirty_curr, false);
+        EXPECT_EQ(t10->dirty_prev, false);
+    }
+
+    flushed_tiles = 0;
+    tm.flush([&flushed_tiles](uint16_t x, uint16_t y, uint16_t w, uint16_t h, const uint16_t* buf) {
+        flushed_tiles++;
+    });
+    // Zero tiles should be flushed now! (0% bandwidth usage)
+    EXPECT_EQ(flushed_tiles, 0);
+
+    tm.deinit();
+}
+
 void test_utils() {
     std::cout << "Testing FMT_Utils..." << std::endl;
-    // Perspective table should return 256 for z=0 if focal=256
     EXPECT_NEAR(get_perspective(0), 256, 1);
 }
 
@@ -196,6 +276,7 @@ int main() {
     test_3d();
     test_ring();
     test_fused_pipeline();
+    test_tile_rasterizer();
     test_utils();
     std::cout << "Host tests completed." << std::endl;
     return 0;
